@@ -152,6 +152,44 @@ export const getInvitationsByUser = async (userId: string, status?: 'pending' | 
     return invitations;
 };
 
+// Get invitations sent by user
+export const getInvitationsSentByUser = async (userId: string, status?: 'pending' | 'accepted' | 'declined'): Promise<Invitation[]> => {
+    const invitationsRef = collection(db, 'invitations');
+    let q = query(invitationsRef, where('fromUserId', '==', userId));
+
+    if (status) {
+        q = query(q, where('status', '==', status));
+    }
+
+    const querySnapshot = await getDocs(q);
+
+    const invitations: Invitation[] = [];
+    querySnapshot.forEach((doc) => {
+        invitations.push({ id: doc.id, ...doc.data() } as Invitation);
+    });
+
+    return invitations;
+};
+
+// Get invitations by party ID
+export const getInvitationsByParty = async (partyId: string, status?: 'pending' | 'accepted' | 'declined'): Promise<Invitation[]> => {
+    const invitationsRef = collection(db, 'invitations');
+    let q = query(invitationsRef, where('partyId', '==', partyId));
+
+    if (status) {
+        q = query(q, where('status', '==', status));
+    }
+
+    const querySnapshot = await getDocs(q);
+
+    const invitations: Invitation[] = [];
+    querySnapshot.forEach((doc) => {
+        invitations.push({ id: doc.id, ...doc.data() } as Invitation);
+    });
+
+    return invitations;
+};
+
 // Update invitation status
 export const updateInvitationStatus = async (invitationId: string, status: 'pending' | 'accepted' | 'declined'): Promise<void> => {
     const invitationRef = doc(db, 'invitations', invitationId);
@@ -176,4 +214,18 @@ export const searchUsersByEmail = async (email: string): Promise<any[]> => {
     });
 
     return users;
+};
+
+// Get invitation statistics for a user
+export const getInvitationStats = async (userId: string): Promise<{ pending: number; accepted: number; declined: number; total: number }> => {
+    const invitations = await getInvitationsByUser(userId);
+
+    const stats = {
+        pending: invitations.filter(inv => inv.status === 'pending').length,
+        accepted: invitations.filter(inv => inv.status === 'accepted').length,
+        declined: invitations.filter(inv => inv.status === 'declined').length,
+        total: invitations.length
+    };
+
+    return stats;
 }; 

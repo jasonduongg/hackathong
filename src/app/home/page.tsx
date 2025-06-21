@@ -6,12 +6,14 @@ import { UserProfile } from '@/components/auth/UserProfile';
 import { OnboardingForm } from '@/components/onboarding/OnboardingForm';
 import { Navbar } from '@/components/Navbar';
 import { PartyView } from '@/components/PartyView';
+import { Invitations } from '@/components/Invitations';
 
 export default function HomePage() {
     const { user, userProfile, loading } = useAuth();
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
     const [showParties, setShowParties] = useState(false);
+    const [showInvitations, setShowInvitations] = useState(false);
 
     if (loading) {
         return (
@@ -47,6 +49,7 @@ export default function HomePage() {
                     onHomeClick={() => {
                         setShowProfile(false);
                         setShowParties(false);
+                        setShowInvitations(false);
                     }}
                 />
                 <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
@@ -81,6 +84,7 @@ export default function HomePage() {
                     onHomeClick={() => {
                         setShowProfile(false);
                         setShowParties(false);
+                        setShowInvitations(false);
                     }}
                 />
                 <OnboardingForm
@@ -101,6 +105,7 @@ export default function HomePage() {
                     onHomeClick={() => {
                         setShowProfile(false);
                         setShowParties(false);
+                        setShowInvitations(false);
                     }}
                 />
                 <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
@@ -125,11 +130,33 @@ export default function HomePage() {
                     onHomeClick={() => {
                         setShowProfile(false);
                         setShowParties(false);
+                        setShowInvitations(false);
                     }}
                 />
                 <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                     <div className="px-4 py-6 sm:px-0">
                         <PartyView />
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
+    // Show invitations if requested
+    if (showInvitations) {
+        return (
+            <div className="min-h-screen bg-gray-50 pt-20">
+                <Navbar
+                    onProfileClick={() => setShowProfile(true)}
+                    onHomeClick={() => {
+                        setShowProfile(false);
+                        setShowParties(false);
+                        setShowInvitations(false);
+                    }}
+                />
+                <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                    <div className="px-4 py-6 sm:px-0">
+                        <Invitations />
                     </div>
                 </main>
             </div>
@@ -144,6 +171,7 @@ export default function HomePage() {
                 onHomeClick={() => {
                     setShowProfile(false);
                     setShowParties(false);
+                    setShowInvitations(false);
                 }}
             />
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
@@ -161,6 +189,12 @@ export default function HomePage() {
                                 className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                             >
                                 My Parties
+                            </button>
+                            <button
+                                onClick={() => setShowInvitations(true)}
+                                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                                My Invitations
                             </button>
                             <button
                                 onClick={() => setShowProfile(true)}

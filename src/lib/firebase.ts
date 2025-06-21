@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -49,7 +49,7 @@ try {
 }
 
 // Initialize Cloud Firestore and get a reference to the service
-let db;
+let db: Firestore;
 try {
     db = getFirestore(app);
     console.log('Firestore initialized successfully');

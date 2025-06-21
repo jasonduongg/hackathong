@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -58,5 +59,15 @@ try {
     throw error;
 }
 
-export { auth, db };
+// Initialize Firebase Storage and get a reference to the service
+let storage: FirebaseStorage;
+try {
+    storage = getStorage(app);
+    console.log('Firebase Storage initialized successfully');
+} catch (error) {
+    console.error('Failed to initialize Firebase Storage:', error);
+    throw error;
+}
+
+export { auth, db, storage };
 export default app; 

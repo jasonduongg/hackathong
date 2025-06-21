@@ -19,10 +19,34 @@ export interface UserProfile {
     photoURL?: string;
     createdAt: Date;
     updatedAt: Date;
+    // Onboarding status
+    hasCompletedOnboarding?: boolean;
+    // Onboarding fields
+    dietaryRestrictions?: string[];
+    birthday?: Date;
+    job?: string;
+    availability?: {
+        [day: string]: {
+            [hour: string]: boolean;
+        };
+    };
+    activityPreferences?: string[];
+    foodPreferences?: string[];
+    address?: {
+        street?: string;
+        city?: string;
+        state?: string;
+        zipCode?: string;
+        country?: string;
+    };
+    // Legacy field for backward compatibility
+    generalAvailable?: boolean;
     // Add more user fields as needed
     bio?: string;
     location?: string;
     website?: string;
+    // Party management
+    partyIds?: string[];
 }
 
 // Create a new user profile
@@ -36,6 +60,7 @@ export const createUserProfile = async (user: User, additionalData?: Partial<Use
         photoURL: user.photoURL || '',
         createdAt: new Date(),
         updatedAt: new Date(),
+        hasCompletedOnboarding: false, // Default to false for new users
         ...additionalData,
     };
 

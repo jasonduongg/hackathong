@@ -243,7 +243,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     hours: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.hours,
                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
-                    placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId
+                    placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
+                    image: beforeFlowResult.restaurantDetails.image || null
                 } : null,
                 analysis: {
                     place_names: beforeFlowResult.place_names,
@@ -329,6 +330,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                             For videos: 1 frame every 2 seconds + caption screenshot if available.
                             Uses AI to identify and validate restaurant names using Google Maps API, ensuring accurate place identification from multiple locations.
                             All screenshots are analyzed together for comprehensive results with restaurant deduction.
+                            <br /><br />
+                            <strong>Google Maps Integration:</strong> Automatically fetches restaurant photos, details, ratings, hours, and contact information from Google Maps API.
                         </div>
                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-blue-900"></div>
                     </div>
@@ -394,6 +397,226 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 <div className="mt-8">
                     <h3 className="text-lg font-semibold mb-4">Analysis Results</h3>
 
+                    {/* Restaurant Image Display */}
+                    {beforeFlowResult.restaurantDetails?.image && (
+                        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                            <h4 className="font-medium text-blue-900 mb-3">Restaurant Photo</h4>
+                            <div className="relative">
+                                <img
+                                    src={beforeFlowResult.restaurantDetails.image}
+                                    alt={`${beforeFlowResult.restaurantDetails.name} restaurant`}
+                                    className="w-full h-64 object-cover rounded-lg shadow-md border border-blue-200"
+                                    onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        // Show fallback message
+                                        const container = target.parentElement;
+                                        if (container) {
+                                            container.innerHTML = `
+                                                <div class="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
+                                                    <div class="text-center text-gray-500">
+                                                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                        <p class="text-sm">Image not available</p>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }
+                                    }}
+                                />
+                                <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                                    Google Maps
+                                </div>
+                            </div>
+                            {beforeFlowResult.restaurantDetails.name && (
+                                <p className="text-sm text-blue-700 mt-2 font-medium">
+                                    📍 {beforeFlowResult.restaurantDetails.name}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Restaurant Details Card */}
+                    {beforeFlowResult.restaurantDetails && (
+                        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                            <h4 className="font-medium text-gray-900 mb-4">Restaurant Information</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">
+                                        {beforeFlowResult.restaurantDetails.name}
+                                    </h5>
+                                    {beforeFlowResult.restaurantDetails.address && (
+                                        <div className="flex items-start space-x-2 mb-2">
+                                            <span className="text-gray-500 mt-0.5">📍</span>
+                                            <p className="text-sm text-gray-700">{beforeFlowResult.restaurantDetails.address}</p>
+                                        </div>
+                                    )}
+                                    {beforeFlowResult.restaurantDetails.phone && (
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <span className="text-gray-500">📞</span>
+                                            <a
+                                                href={`tel:${beforeFlowResult.restaurantDetails.phone}`}
+                                                className="text-sm text-blue-600 hover:text-blue-800"
+                                            >
+                                                {beforeFlowResult.restaurantDetails.phone}
+                                            </a>
+                                        </div>
+                                    )}
+                                    {beforeFlowResult.restaurantDetails.website && (
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <span className="text-gray-500">🌐</span>
+                                            <a
+                                                href={beforeFlowResult.restaurantDetails.website}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-blue-600 hover:text-blue-800"
+                                            >
+                                                Visit Website
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    {beforeFlowResult.restaurantDetails.rating && (
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <span className="text-gray-500">⭐</span>
+                                            <span className="text-sm text-gray-700">
+                                                {beforeFlowResult.restaurantDetails.rating}/5 rating
+                                            </span>
+                                        </div>
+                                    )}
+                                    {beforeFlowResult.restaurantDetails.hours && beforeFlowResult.restaurantDetails.hours.length > 0 && (
+                                        <div className="mb-2">
+                                            <div className="flex items-start space-x-2">
+                                                <span className="text-gray-500 mt-0.5">🕒</span>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-700 mb-1">Hours:</p>
+                                                    <div className="text-xs text-gray-600 space-y-1">
+                                                        {beforeFlowResult.restaurantDetails.hours.slice(0, 3).map((hour: string, index: number) => (
+                                                            <div key={index}>{hour}</div>
+                                                        ))}
+                                                        {beforeFlowResult.restaurantDetails.hours.length > 3 && (
+                                                            <div className="text-blue-600 cursor-pointer">
+                                                                +{beforeFlowResult.restaurantDetails.hours.length - 3} more days
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {beforeFlowResult.restaurantDetails.placeId && (
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-gray-500">🆔</span>
+                                            <span className="text-xs text-gray-500">
+                                                Google Place ID: {beforeFlowResult.restaurantDetails.placeId}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Analysis Summary */}
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="font-medium text-green-900 mb-4">Analysis Summary</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h5 className="text-sm font-medium text-green-800 mb-2">📍 Places Identified</h5>
+                                <div className="space-y-1">
+                                    {beforeFlowResult.place_names && beforeFlowResult.place_names.length > 0 ? (
+                                        beforeFlowResult.place_names.map((place: string, index: number) => (
+                                            <div key={index} className="text-sm text-green-700 bg-green-100 px-2 py-1 rounded">
+                                                {place}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-green-600 italic">No specific places identified</p>
+                                    )}
+                                </div>
+
+                                <h5 className="text-sm font-medium text-green-800 mb-2 mt-4">🍽️ Foods Shown</h5>
+                                <div className="flex flex-wrap gap-1">
+                                    {beforeFlowResult.foods_shown && beforeFlowResult.foods_shown.length > 0 ? (
+                                        beforeFlowResult.foods_shown.map((food: string, index: number) => (
+                                            <span key={index} className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full">
+                                                {food}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-green-600 italic">No specific foods identified</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h5 className="text-sm font-medium text-green-800 mb-2">🏷️ Tags & Context</h5>
+                                <div className="space-y-2">
+                                    <div>
+                                        <span className="text-xs font-medium text-green-700">Activity Type:</span>
+                                        <div className="text-sm text-green-600 capitalize">
+                                            {beforeFlowResult.activity_type || 'Not specified'}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="text-xs font-medium text-green-700">Tags:</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {beforeFlowResult.tags && beforeFlowResult.tags.length > 0 ? (
+                                                beforeFlowResult.tags.slice(0, 6).map((tag: string, index: number) => (
+                                                    <span key={index} className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">
+                                                        {tag}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-green-600 italic">No tags identified</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {beforeFlowResult.context_clues && beforeFlowResult.context_clues.length > 0 && (
+                                        <div>
+                                            <span className="text-xs font-medium text-green-700">Context Clues:</span>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {beforeFlowResult.context_clues.slice(0, 4).map((clue: string, index: number) => (
+                                                    <span key={index} className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                                        {clue}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {beforeFlowResult.processingInfo && (
+                            <div className="mt-4 pt-4 border-t border-green-200">
+                                <h5 className="text-sm font-medium text-green-800 mb-2">📊 Processing Info</h5>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                    <div>
+                                        <span className="text-green-600">Frames:</span>
+                                        <div className="font-medium text-green-800">{beforeFlowResult.processingInfo.frameCount || 0}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-green-600">Places Found:</span>
+                                        <div className="font-medium text-green-800">{beforeFlowResult.processingInfo.originalPlaceCount || 0}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-green-600">Validated:</span>
+                                        <div className="font-medium text-green-800">{beforeFlowResult.processingInfo.validatedPlaceCount || 0}</div>
+                                    </div>
+                                    <div>
+                                        <span className="text-green-600">Geocoded:</span>
+                                        <div className="font-medium text-green-800">{beforeFlowResult.processingInfo.geocodedPlaceCount || 0}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Clean Restaurant Data */}
                     <div className="mt-6 p-4 bg-blue-50 rounded-md">
                         <h4 className="font-medium text-blue-900 mb-2">Clean Restaurant Data</h4>
@@ -409,7 +632,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                     hours: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.hours,
                                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
-                                    placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId
+                                    placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
+                                    image: beforeFlowResult.restaurantDetails.image || null
                                 } : null,
                                 analysis: {
                                     place_names: beforeFlowResult.place_names,
@@ -464,7 +688,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                     <p className="text-green-700 font-medium">Event saved successfully!</p>
                                 </div>
                                 <p className="text-green-600 text-sm mt-1">
-                                    Restaurant data and Instagram post have been saved to the events database.
+                                    Restaurant data (including Google Maps image), analysis results, and Instagram post have been saved to the events database.
                                 </p>
                             </div>
                         )}
@@ -486,7 +710,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                         <div className="mt-3 text-xs text-gray-500">
                             <p>This will save:</p>
                             <ul className="list-disc list-inside mt-1 space-y-1">
-                                <li>Clean restaurant data (name, address, hours, rating, etc.)</li>
+                                <li>Clean restaurant data (name, address, hours, rating, Google Maps image, etc.)</li>
                                 <li>Analysis results (foods shown, tags, context clues)</li>
                                 <li>Instagram post metadata (captions, hashtags, account mentions)</li>
                                 <li>Party association and user information</li>

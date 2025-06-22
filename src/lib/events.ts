@@ -45,6 +45,7 @@ export interface RestaurantEvent {
             phone?: string | null;
             rating?: number | null;
             placeId?: string | null;
+            image?: string | null;
         } | null;
         analysis: {
             place_names: string[];

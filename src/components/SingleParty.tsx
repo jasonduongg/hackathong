@@ -54,6 +54,8 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [memberMetadata, setMemberMetadata] = useState<any>(null);
     const [showMemberMetadata, setShowMemberMetadata] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
+    const [commonTimes, setCommonTimes] = useState<any>(null);
+    const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
 
     useEffect(() => {
         const fetchPartyDetails = async () => {
@@ -228,11 +230,14 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
 
         try {
             setLoadingMetadata(true);
-            const response = await fetch(`/api/get-same-times?partyId=${partyId}`);
+            const response = await fetch(`/api/get-members?partyId=${partyId}`);
             const data = await response.json();
 
             if (data.success) {
                 setMemberMetadata(data);
+                
+                // Now call the get-times API to find common availability times
+                await fetchCommonTimes(data.memberProfiles);
             } else {
                 console.error('Failed to fetch member metadata:', data.error);
                 alert('Failed to fetch member metadata');
@@ -242,6 +247,35 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
             alert('Error fetching member metadata');
         } finally {
             setLoadingMetadata(false);
+        }
+    };
+
+    const fetchCommonTimes = async (memberProfiles: any[]) => {
+        if (!memberProfiles || memberProfiles.length === 0) return;
+
+        try {
+            setLoadingCommonTimes(true);
+            const response = await fetch('/api/get-times', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    memberProfiles: memberProfiles
+                })
+            });
+            
+            const data = await response.json();
+
+            if (data.success) {
+                setCommonTimes(data);
+            } else {
+                console.error('Failed to fetch common times:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching common times:', error);
+        } finally {
+            setLoadingCommonTimes(false);
         }
     };
 
@@ -661,6 +695,94 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                             </div>
                                         </div>
 
+                                        {/* Common Times Section */}
+                                        {loadingCommonTimes ? (
+                                            <div className="bg-yellow-50 rounded-lg p-4">
+                                                <h4 className="text-md font-medium text-yellow-900 mb-2">Common Availability Times</h4>
+                                                <div className="text-center py-4">
+                                                    <div className="text-lg text-yellow-700">Finding common times...</div>
+                                                </div>
+                                            </div>
+                                        ) : commonTimes ? (
+                                            <div className="bg-green-50 rounded-lg p-4">
+                                                <h4 className="text-md font-medium text-green-900 mb-2">Common Availability Times</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
+                                                    <div>
+                                                        <span className="font-medium text-green-800">Total Available Slots:</span> {commonTimes.totalSlots}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium text-green-800">Days with Common Times:</span> {commonTimes.commonTimes.length}
+                                                    </div>
+                                                </div>
+                                                
+                                                {commonTimes.commonTimes.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {commonTimes.commonTimes.map((day: any, index: number) => (
+                                                            <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <h5 className="font-medium text-green-800 capitalize">{day.day}</h5>
+                                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                                        {day.slotCount} slots
+                                                                    </span>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    {day.timeRanges.map((range: string, rangeIndex: number) => (
+                                                                        <div key={rangeIndex} className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
+                                                                            {range}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-4">
+                                                        <div className="text-lg text-green-700">No common times found</div>
+                                                        <div className="text-sm text-green-600 mt-1">All members need to be available at the same time</div>
+                                                    </div>
+                                                )}
+
+                                                {/* Aggregated Preferences */}
+                                                {commonTimes.aggregatedPreferences && (
+                                                    <div className="mt-4">
+                                                        <h5 className="font-medium text-green-800 mb-2">Group Preferences</h5>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                                            <div>
+                                                                <span className="font-medium text-green-700">Dietary:</span>
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {commonTimes.aggregatedPreferences.dietaryRestrictions?.map((restriction: string, i: number) => (
+                                                                        <span key={i} className="px-2 py-1 bg-red-100 text-red-800 rounded-full">
+                                                                            {restriction}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-green-700">Food:</span>
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {commonTimes.aggregatedPreferences.foodPreferences?.map((preference: string, i: number) => (
+                                                                        <span key={i} className="px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                                                                            {preference}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-green-700">Activities:</span>
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {commonTimes.aggregatedPreferences.activityPreferences?.map((preference: string, i: number) => (
+                                                                        <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                                                            {preference}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : null}
+
                                         {/* Member Profiles */}
                                         <div>
                                             <h4 className="text-md font-medium text-gray-900 mb-3">Member Profiles</h4>
@@ -681,12 +803,7 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                                             <div>
                                                                 <span className="font-medium text-gray-700">Job:</span> {member.job || 'Not specified'}
                                                             </div>
-                                                            <div>
-                                                                <span className="font-medium text-gray-700">Location:</span> {member.location || 'Not specified'}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium text-gray-700">Bio:</span> {member.bio || 'Not specified'}
-                                                            </div>
+
                                                             <div>
                                                                 <span className="font-medium text-gray-700">Dietary Restrictions:</span>
                                                                 <div className="mt-1">
@@ -758,7 +875,7 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                             <h4 className="text-md font-medium text-gray-900 mb-3">Raw API Response</h4>
                                             <div className="bg-gray-50 rounded-lg p-4">
                                                 <pre className="text-xs text-gray-800 overflow-x-auto whitespace-pre-wrap">
-                                                    {JSON.stringify(memberMetadata, null, 2)}
+                                                    {JSON.stringify({ memberMetadata, commonTimes }, null, 2)}
                                                 </pre>
                                             </div>
                                         </div>

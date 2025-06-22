@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
         // Navigate to the Instagram post
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
         
+        // ENHANCED: Wait longer for Instagram to fully load, especially for carousels
+        console.log('Waiting for Instagram page to fully load...');
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time for carousel loading
+        
         // OPTIMIZED: Reduced wait time for popups
         await new Promise(resolve => setTimeout(resolve, 2000));
         
@@ -116,96 +120,119 @@ export async function POST(request: NextRequest) {
         
         // ENHANCED: Better carousel detection with URL-based detection as primary method
         console.log('Detecting carousel/multi-panel post...');
-        const carouselInfo = await page.evaluate(() => {
-            // Look for carousel indicators with more comprehensive selectors
-            const indicators = document.querySelectorAll('[data-testid="carousel-indicator"], [data-testid="carousel-dot"]');
-            const dots = document.querySelectorAll('[role="tab"], [aria-label*="carousel"], [data-testid*="carousel"]');
-            const navigationButtons = document.querySelectorAll('[aria-label*="Next"], [aria-label*="next"], [aria-label*="Previous"], [aria-label*="previous"], button[aria-label*="Next"], button[aria-label*="Previous"]');
-            
-            // Look for carousel container elements
-            const carouselContainers = document.querySelectorAll('[data-testid*="carousel"], [class*="carousel"], [role="region"]');
-            
-            // Check for multiple images in the post - look for ALL media elements, not just visible ones
-            const images = document.querySelectorAll('img[src*="instagram"], img[alt*="Photo"], img[data-testid*="image"], img[src*="cdninstagram"]');
-            const videos = document.querySelectorAll('video, [data-testid="video-player"], video[src*="instagram"]');
-            
-            // Enhanced detection logic - look for actual carousel navigation elements
-            const hasCarouselElements = indicators.length > 1 || dots.length > 1 || navigationButtons.length > 0 || carouselContainers.length > 0;
-            
-            // Check if there are multiple visible media items (not just hidden ones)
-            let visibleMediaCount = 0;
-            const allMedia = [...images, ...videos];
-            
-            for (const media of allMedia) {
-                const rect = media.getBoundingClientRect();
-                if (rect.width > 100 && rect.height > 100 && 
-                    rect.x >= 0 && rect.y >= 0 && 
-                    rect.right <= window.innerWidth && rect.bottom <= window.innerHeight) {
-                    visibleMediaCount++;
+        
+        // If URL indicates carousel, be more aggressive in detection
+        let carouselInfo;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        do {
+            carouselInfo = await page.evaluate(() => {
+                // Look for carousel indicators with more comprehensive selectors
+                const indicators = document.querySelectorAll('[data-testid="carousel-indicator"], [data-testid="carousel-dot"]');
+                const dots = document.querySelectorAll('[role="tab"], [aria-label*="carousel"], [data-testid*="carousel"]');
+                const navigationButtons = document.querySelectorAll('[aria-label*="Next"], [aria-label*="next"], [aria-label*="Previous"], [aria-label*="previous"], button[aria-label*="Next"], button[aria-label*="Previous"]');
+                
+                // Look for carousel container elements
+                const carouselContainers = document.querySelectorAll('[data-testid*="carousel"], [class*="carousel"], [role="region"]');
+                
+                // ENHANCED: More comprehensive media detection selectors
+                const images = document.querySelectorAll('img[src*="instagram"], img[alt*="Photo"], img[data-testid*="image"], img[src*="cdninstagram"], img[src*="scontent"], img[src*="scontent.cdninstagram"], img[data-testid="post-media"], img[role="img"]');
+                const videos = document.querySelectorAll('video, [data-testid="video-player"], video[src*="instagram"], video[src*="cdninstagram"], video[data-testid*="video"]');
+                
+                // Also look for media containers that might contain the actual media
+                const mediaContainers = document.querySelectorAll('[data-testid*="media"], [class*="media"], [data-testid="post-media"], [data-testid="carousel-container"]');
+                
+                // Enhanced detection logic - look for actual carousel navigation elements
+                const hasCarouselElements = indicators.length > 1 || dots.length > 1 || navigationButtons.length > 0 || carouselContainers.length > 0;
+                
+                // Check if there are multiple visible media items (not just hidden ones)
+                let visibleMediaCount = 0;
+                const allMedia = [...images, ...videos];
+                
+                for (const media of allMedia) {
+                    const rect = media.getBoundingClientRect();
+                    if (rect.width > 100 && rect.height > 100 && 
+                        rect.x >= 0 && rect.y >= 0 && 
+                        rect.right <= window.innerWidth && rect.bottom <= window.innerHeight) {
+                        visibleMediaCount++;
+                    }
                 }
-            }
+                
+                // Look for Instagram-specific carousel indicators
+                const instagramIndicators = document.querySelectorAll('[data-testid="carousel-indicator"], [role="tab"]');
+                const hasInstagramCarousel = instagramIndicators.length > 1;
+                
+                // Check for carousel navigation buttons
+                const hasNavigationButtons = navigationButtons.length > 0;
+                
+                // Only treat as carousel if there are actual navigation elements OR Instagram carousel indicators
+                const isCarousel = hasCarouselElements || hasInstagramCarousel || hasNavigationButtons;
+                
+                // ENHANCED: Better panel count detection with multiple strategies
+                let panelCount = 1;
+                
+                // Strategy 1: Use Instagram carousel indicators (most reliable)
+                if (instagramIndicators.length > 1) {
+                    panelCount = instagramIndicators.length;
+                    console.log(`Using Instagram indicators count: ${panelCount}`);
+                }
+                // Strategy 2: Use other carousel indicators
+                else if (indicators.length > 1) {
+                    panelCount = indicators.length;
+                    console.log(`Using general indicators count: ${panelCount}`);
+                }
+                // Strategy 3: Use dots/tabs
+                else if (dots.length > 1) {
+                    panelCount = dots.length;
+                    console.log(`Using dots count: ${panelCount}`);
+                }
+                // Strategy 4: If we have navigation buttons, estimate from total media count
+                else if (hasNavigationButtons && (images.length + videos.length) > 1) {
+                    // Instagram often has many hidden media elements, so use total count
+                    panelCount = Math.min(images.length + videos.length, 15); // Cap at 15 to be safe
+                    console.log(`Using total media count with navigation: ${panelCount} (from ${images.length + videos.length} total media)`);
+                }
+                // Strategy 5: Use visible media count if multiple visible
+                else if (visibleMediaCount > 1) {
+                    panelCount = visibleMediaCount;
+                    console.log(`Using visible media count: ${panelCount}`);
+                }
+                // Strategy 6: If total media count is high, it's likely a carousel
+                else if (images.length + videos.length > 3) {
+                    panelCount = Math.min(images.length + videos.length, 10);
+                    console.log(`Using high total media count: ${panelCount} (from ${images.length + videos.length} total media)`);
+                }
+                
+                return {
+                    isCarousel,
+                    panelCount,
+                    hasIndicators: indicators.length > 0,
+                    hasDots: dots.length > 0,
+                    hasNavigation: navigationButtons.length > 0,
+                    hasCarouselContainers: carouselContainers.length > 0,
+                    hasInstagramCarousel: hasInstagramCarousel,
+                    imageCount: images.length,
+                    videoCount: videos.length,
+                    totalMediaCount: images.length + videos.length,
+                    visibleMediaCount: visibleMediaCount,
+                    hasCarouselElements: hasCarouselElements,
+                    instagramIndicatorCount: instagramIndicators.length,
+                    mediaContainerCount: mediaContainers.length
+                };
+            });
             
-            // Look for Instagram-specific carousel indicators
-            const instagramIndicators = document.querySelectorAll('[data-testid="carousel-indicator"], [role="tab"]');
-            const hasInstagramCarousel = instagramIndicators.length > 1;
+            console.log(`Carousel detection attempt ${retryCount + 1}:`, carouselInfo);
             
-            // Check for carousel navigation buttons
-            const hasNavigationButtons = navigationButtons.length > 0;
-            
-            // Only treat as carousel if there are actual navigation elements OR Instagram carousel indicators
-            const isCarousel = hasCarouselElements || hasInstagramCarousel || hasNavigationButtons;
-            
-            // ENHANCED: Better panel count detection with multiple strategies
-            let panelCount = 1;
-            
-            // Strategy 1: Use Instagram carousel indicators (most reliable)
-            if (instagramIndicators.length > 1) {
-                panelCount = instagramIndicators.length;
-                console.log(`Using Instagram indicators count: ${panelCount}`);
+            // If URL indicates carousel but DOM doesn't find media, wait and retry
+            if (isUrlCarousel && carouselInfo.totalMediaCount === 0 && retryCount < maxRetries - 1) {
+                console.log('URL indicates carousel but no media found, waiting and retrying...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                retryCount++;
+            } else {
+                break;
             }
-            // Strategy 2: Use other carousel indicators
-            else if (indicators.length > 1) {
-                panelCount = indicators.length;
-                console.log(`Using general indicators count: ${panelCount}`);
-            }
-            // Strategy 3: Use dots/tabs
-            else if (dots.length > 1) {
-                panelCount = dots.length;
-                console.log(`Using dots count: ${panelCount}`);
-            }
-            // Strategy 4: If we have navigation buttons, estimate from total media count
-            else if (hasNavigationButtons && (images.length + videos.length) > 1) {
-                // Instagram often has many hidden media elements, so use total count
-                panelCount = Math.min(images.length + videos.length, 15); // Cap at 15 to be safe
-                console.log(`Using total media count with navigation: ${panelCount} (from ${images.length + videos.length} total media)`);
-            }
-            // Strategy 5: Use visible media count if multiple visible
-            else if (visibleMediaCount > 1) {
-                panelCount = visibleMediaCount;
-                console.log(`Using visible media count: ${panelCount}`);
-            }
-            // Strategy 6: If total media count is high, it's likely a carousel
-            else if (images.length + videos.length > 3) {
-                panelCount = Math.min(images.length + videos.length, 10);
-                console.log(`Using high total media count: ${panelCount} (from ${images.length + videos.length} total media)`);
-            }
-            
-            return {
-                isCarousel,
-                panelCount,
-                hasIndicators: indicators.length > 0,
-                hasDots: dots.length > 0,
-                hasNavigation: navigationButtons.length > 0,
-                hasCarouselContainers: carouselContainers.length > 0,
-                hasInstagramCarousel: hasInstagramCarousel,
-                imageCount: images.length,
-                videoCount: videos.length,
-                totalMediaCount: images.length + videos.length,
-                visibleMediaCount: visibleMediaCount,
-                hasCarouselElements: hasCarouselElements,
-                instagramIndicatorCount: instagramIndicators.length
-            };
-        });
+        } while (retryCount < maxRetries);
         
         // ENHANCED: Combine URL-based detection with DOM-based detection
         const finalCarouselInfo = {
@@ -296,7 +323,11 @@ export async function POST(request: NextRequest) {
                 '[data-testid="carousel-container"]',
                 '[data-testid*="media"]',
                 '[class*="media"]',
-                '[class*="post"]'
+                '[class*="post"]',
+                'article img',
+                'article video',
+                '[role="main"] img',
+                '[role="main"] video'
             ];
             
             let mediaElement = null;
@@ -322,8 +353,8 @@ export async function POST(request: NextRequest) {
             
             // If no media container found, look for the largest visible image or video
             if (!mediaElement) {
-                const images = document.querySelectorAll('img[src*="instagram"], img[alt*="Photo"], img[data-testid*="image"]');
-                const videos = document.querySelectorAll('video, [data-testid="video-player"]');
+                const images = document.querySelectorAll('img[src*="instagram"], img[alt*="Photo"], img[data-testid*="image"], img[src*="cdninstagram"], img[src*="scontent"], img[src*="scontent.cdninstagram"], img[data-testid="post-media"], img[role="img"]');
+                const videos = document.querySelectorAll('video, [data-testid="video-player"], video[src*="instagram"], video[src*="cdninstagram"], video[data-testid*="video"]');
                 
                 let largestElement = null;
                 let largestArea = 0;

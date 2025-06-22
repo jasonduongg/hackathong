@@ -139,7 +139,8 @@ async function performOptimizedRestaurantDeduction(
                 hours: placeDetails?.opening_hours?.weekday_text || null,
                 phone: placeDetails?.formatted_phone_number || null,
                 rating: placeDetails?.rating || null,
-                placeId: placeDetails?.place_id || null
+                placeId: placeDetails?.place_id || null,
+                image: placeDetails?.photoUrl || null
             },
             uniqueRestaurantNames,
             hasMultipleRestaurants: false
@@ -161,7 +162,8 @@ async function performOptimizedRestaurantDeduction(
                 hours: placeDetails?.opening_hours?.weekday_text || null,
                 phone: placeDetails?.formatted_phone_number || null,
                 rating: placeDetails?.rating || null,
-                placeId: placeDetails?.place_id || null
+                placeId: placeDetails?.place_id || null,
+                image: placeDetails?.photoUrl || null
             },
             uniqueRestaurantNames,
             hasMultipleRestaurants: true
@@ -183,7 +185,8 @@ async function performOptimizedRestaurantDeduction(
                 hours: placeDetails?.opening_hours?.weekday_text || null,
                 phone: placeDetails?.formatted_phone_number || null,
                 rating: placeDetails?.rating || null,
-                placeId: placeDetails?.place_id || null
+                placeId: placeDetails?.place_id || null,
+                image: placeDetails?.photoUrl || null
             },
             uniqueRestaurantNames,
             hasMultipleRestaurants: false

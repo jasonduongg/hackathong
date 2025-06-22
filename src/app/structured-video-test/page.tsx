@@ -708,6 +708,21 @@ export default function StructuredVideoTest() {
                                             {/* Restaurant Details */}
                                             {result.restaurantDetails && (
                                                 <div className="mt-3 p-3 bg-white rounded border">
+                                                    {/* Restaurant Image */}
+                                                    {result.restaurantDetails.image && (
+                                                        <div className="mb-3">
+                                                            <img 
+                                                                src={result.restaurantDetails.image} 
+                                                                alt={`${result.restaurantDetails.name} restaurant`}
+                                                                className="w-full h-32 object-cover rounded border"
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    
                                                     {result.restaurantDetails.isChain ? (
                                                         <div className="text-sm">
                                                             <div className="flex items-center gap-2 mb-2">
@@ -872,7 +887,8 @@ export default function StructuredVideoTest() {
                                         hours: result.restaurantDetails.isChain ? null : result.restaurantDetails.hours,
                                         phone: result.restaurantDetails.isChain ? null : result.restaurantDetails.phone,
                                         rating: result.restaurantDetails.isChain ? null : result.restaurantDetails.rating,
-                                        placeId: result.restaurantDetails.isChain ? null : result.restaurantDetails.placeId
+                                        placeId: result.restaurantDetails.isChain ? null : result.restaurantDetails.placeId,
+                                        image: result.restaurantDetails.isChain ? null : result.restaurantDetails.image
                                     } : null,
                                     analysis: {
                                         place_names: result.place_names,

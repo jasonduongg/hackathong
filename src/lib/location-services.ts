@@ -461,7 +461,7 @@ export async function getPlaceDetails(searchQuery: string): Promise<any> {
                 params: {
                     place_id: placeId,
                     key: apiKey,
-                    fields: 'name,formatted_address,website,formatted_phone_number,opening_hours,rating,place_id'
+                    fields: 'name,formatted_address,website,formatted_phone_number,opening_hours,rating,place_id,photos'
                 }
             });
 
@@ -469,6 +469,13 @@ export async function getPlaceDetails(searchQuery: string): Promise<any> {
             
             if (detailsData.status === 'OK' && detailsData.result) {
                 console.log(`Retrieved details for: ${detailsData.result.name}`);
+                
+                // Add photo URL if photos are available
+                if (detailsData.result.photos && detailsData.result.photos.length > 0) {
+                    const photoReference = detailsData.result.photos[0].photo_reference;
+                    detailsData.result.photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoReference}&key=${apiKey}`;
+                }
+                
                 return detailsData.result;
             } else {
                 console.log(`Place details API returned status: ${detailsData.status}`);

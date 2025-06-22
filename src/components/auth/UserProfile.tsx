@@ -74,6 +74,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding })
     console.log('UserProfile: userProfile', userProfile);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [paypalEmail, setPayPalEmail] = useState(userProfile?.paypalEmail || '');
+    const [paypalSaveStatus, setPaypalSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [isChangingPaypalEmail, setIsChangingPaypalEmail] = useState(false);
     const [formData, setFormData] = useState({
         displayName: userProfile?.displayName || '',
         job: userProfile?.job || '',
@@ -132,6 +135,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding })
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSavePaypalEmail = async () => {
+        if (!user) return;
+        setPaypalSaveStatus('saving');
+        try {
+            await updateUserProfile(user.uid, { paypalEmail });
+            setPaypalSaveStatus('saved');
+            setIsChangingPaypalEmail(false);
+            await refreshUserProfile();
+            setTimeout(() => setPaypalSaveStatus('idle'), 2000);
+        } catch (e) {
+            setPaypalSaveStatus('error');
+            setTimeout(() => setPaypalSaveStatus('idle'), 2000);
+        }
+    };
+
+    const handleChangePaypalEmail = () => {
+        setIsChangingPaypalEmail(true);
+        setPayPalEmail('');
     };
 
     const formatDate = (date: any) => {
@@ -298,6 +321,68 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding })
                                 {userProfile.birthday ? formatDate(userProfile.birthday) : 'Not specified'}
                             </p>
                         </div>
+                    </div>
+                </div>
+
+                {/* PayPal Email */}
+                <div className="border-b pb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Payment Settings</h3>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">PayPal Email</label>
+                        {userProfile?.paypalEmail && !isChangingPaypalEmail ? (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div className="flex items-center justify-center space-x-2">
+                                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span className="text-green-800 font-medium">PayPal Connected</span>
+                                </div>
+                                <p className="text-sm text-green-600 text-center mt-1">{userProfile.paypalEmail}</p>
+                                <button
+                                    onClick={handleChangePaypalEmail}
+                                    className="text-xs text-green-600 hover:text-green-800 mt-2 underline"
+                                >
+                                    Change PayPal Email
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="email"
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="your-paypal@email.com"
+                                        value={paypalEmail}
+                                        onChange={e => setPayPalEmail(e.target.value)}
+                                    />
+                                    <button
+                                        onClick={handleSavePaypalEmail}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                        disabled={paypalSaveStatus === 'saving' || !paypalEmail}
+                                    >
+                                        {paypalSaveStatus === 'saving' ? 'Saving...' : paypalSaveStatus === 'saved' ? 'Saved!' : 'Save'}
+                                    </button>
+                                </div>
+                                {isChangingPaypalEmail && (
+                                    <button
+                                        onClick={() => {
+                                            setIsChangingPaypalEmail(false);
+                                            setPayPalEmail(userProfile?.paypalEmail || '');
+                                        }}
+                                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                                {paypalSaveStatus === 'error' && (
+                                    <p className="text-red-500 text-xs">Failed to save. Try again.</p>
+                                )}
+                            </div>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">
+                            This email will be used to receive payments from other users.
+                        </p>
                     </div>
                 </div>
 

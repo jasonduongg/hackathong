@@ -52,7 +52,7 @@ export async function processInstagramPost(
 
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
+            max_tokens: 2000,
             system: systemPrompt,
             messages: [
                 {
@@ -103,7 +103,7 @@ export async function processYouTubeVideo(
 
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
+            max_tokens: 2000,
             system: systemPrompt,
             messages: [
                 {
@@ -175,7 +175,7 @@ export async function processImageURL(
 
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
+            max_tokens: 2000,
             system: systemPrompt,
             messages: [
                 {
@@ -287,7 +287,7 @@ export async function processVideoFile(
 
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
+            max_tokens: 2000,
             system: systemPrompt,
             messages: [
                 {
@@ -343,7 +343,7 @@ export async function processVideoFrames(
                 try {
                     const response = await anthropic.messages.create({
                         model: "claude-3-5-sonnet-20241022",
-                        max_tokens: 1000,
+                        max_tokens: 2000,
                         system: systemPrompt,
                         messages: [
                             {
@@ -529,7 +529,7 @@ export async function processImageFile(
 
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1000,
+            max_tokens: 2000,
             system: systemPrompt,
             messages: [
                 {
@@ -722,7 +722,7 @@ Return ONLY the JSON object, nothing else.`;
         try {
             const response = await anthropic.messages.create({
                 model: "claude-3-5-sonnet-20241022",
-                max_tokens: 1000, // Reduced for faster response
+                max_tokens: 2000,// Reduced for faster response
                 system: systemPrompt,
                 messages: messages
             });

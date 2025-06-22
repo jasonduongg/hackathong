@@ -69,6 +69,7 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeleting, onEventUpdated }) => {
     const [creatorName, setCreatorName] = useState<string>('Loading...');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [openToAvailability, setOpenToAvailability] = useState(false);
 
     useEffect(() => {
         const fetchCreatorName = async () => {
@@ -96,6 +97,16 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
         if (onEventUpdated) {
             onEventUpdated(updatedEvent);
         }
+    };
+
+    const handleOpenScheduleModal = () => {
+        setOpenToAvailability(true);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setOpenToAvailability(false);
     };
 
     const formatDate = (date: any) => {
@@ -221,6 +232,15 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                                 </svg>
                             </button>
                             <button
+                                onClick={handleOpenScheduleModal}
+                                className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50 transition-colors"
+                                title="Schedule event"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                            <button
                                 onClick={() => onDelete(event.id)}
                                 disabled={isDeleting}
                                 className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed p-2 rounded-full hover:bg-red-50 transition-colors"
@@ -286,8 +306,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                 event={event}
                 creatorName={creatorName}
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={handleCloseModal}
                 onEventUpdated={handleEventUpdated}
+                openToAvailability={openToAvailability}
             />
         </div>
     );

@@ -64,9 +64,10 @@ interface EventModalProps {
     isOpen: boolean;
     onClose: () => void;
     onEventUpdated?: (event: RestaurantEvent) => void;
+    openToAvailability?: boolean;
 }
 
-export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated }) => {
+export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated, openToAvailability }) => {
     const [showAvailability, setShowAvailability] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
     const [commonTimes, setCommonTimes] = useState<any>(null);
@@ -82,13 +83,25 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
         if (isOpen) {
             document.addEventListener('keydown', handleEscape);
             document.body.style.overflow = 'hidden';
+
+            // If openToAvailability is true, automatically show the availability view
+            if (openToAvailability) {
+                setShowAvailability(true);
+            }
         }
 
         return () => {
             document.removeEventListener('keydown', handleEscape);
             document.body.style.overflow = 'unset';
         };
-    }, [isOpen, onClose]);
+    }, [isOpen, onClose, openToAvailability]);
+
+    // Auto-load availability data when availability view is shown
+    useEffect(() => {
+        if (showAvailability && !memberMetadata && !loadingMetadata) {
+            fetchMemberMetadata();
+        }
+    }, [showAvailability, memberMetadata, loadingMetadata]);
 
     const fetchMemberMetadata = async () => {
         if (!event.partyId) return;

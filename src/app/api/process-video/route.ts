@@ -123,42 +123,45 @@ async function performOptimizedRestaurantDeduction(
 
     const uniqueRestaurantNames = [...new Set(placesToAnalyze)];
     const hasMultipleRestaurants = uniqueRestaurantNames.length > 1;
-
-    // If only one restaurant found, skip complex AI analysis
     if (uniqueRestaurantNames.length === 1) {
         const restaurantName = uniqueRestaurantNames[0];
+        
+        // Get detailed restaurant information
+        const placeDetails = await getPlaceDetails(restaurantName);
+        
         return {
             deducedRestaurant: restaurantName,
             restaurantDetails: {
                 name: restaurantName,
                 isChain: false,
-                address: null,
-                website: null,
-                hours: null,
-                phone: null,
-                rating: null,
-                placeId: null
+                address: placeDetails?.formatted_address || null,
+                website: placeDetails?.website || null,
+                hours: placeDetails?.opening_hours?.weekday_text || null,
+                phone: placeDetails?.formatted_phone_number || null,
+                rating: placeDetails?.rating || null,
+                placeId: placeDetails?.place_id || null
             },
             uniqueRestaurantNames,
             hasMultipleRestaurants: false
         };
     }
-
-    // For multiple restaurants, use simplified logic instead of full AI analysis
     if (hasMultipleRestaurants) {
-        // Use the first business-like place name as primary
         const primaryRestaurant = placesToAnalyze[0];
+        
+        // Get detailed restaurant information
+        const placeDetails = await getPlaceDetails(primaryRestaurant);
+        
         return {
             deducedRestaurant: primaryRestaurant,
             restaurantDetails: {
                 name: primaryRestaurant,
                 isChain: false,
-                address: null,
-                website: null,
-                hours: null,
-                phone: null,
-                rating: null,
-                placeId: null
+                address: placeDetails?.formatted_address || null,
+                website: placeDetails?.website || null,
+                hours: placeDetails?.opening_hours?.weekday_text || null,
+                phone: placeDetails?.formatted_phone_number || null,
+                rating: placeDetails?.rating || null,
+                placeId: placeDetails?.place_id || null
             },
             uniqueRestaurantNames,
             hasMultipleRestaurants: true
@@ -166,18 +169,30 @@ async function performOptimizedRestaurantDeduction(
     }
 
     // Fallback to first place name or null
+    const fallbackRestaurant = placesToAnalyze[0];
+    if (fallbackRestaurant) {
+        const placeDetails = await getPlaceDetails(fallbackRestaurant);
+        
+        return {
+            deducedRestaurant: fallbackRestaurant,
+            restaurantDetails: {
+                name: fallbackRestaurant,
+                isChain: false,
+                address: placeDetails?.formatted_address || null,
+                website: placeDetails?.website || null,
+                hours: placeDetails?.opening_hours?.weekday_text || null,
+                phone: placeDetails?.formatted_phone_number || null,
+                rating: placeDetails?.rating || null,
+                placeId: placeDetails?.place_id || null
+            },
+            uniqueRestaurantNames,
+            hasMultipleRestaurants: false
+        };
+    }
+    
     return {
-        deducedRestaurant: placesToAnalyze[0] || null,
-        restaurantDetails: placesToAnalyze[0] ? {
-            name: placesToAnalyze[0],
-            isChain: false,
-            address: null,
-            website: null,
-            hours: null,
-            phone: null,
-            rating: null,
-            placeId: null
-        } : null,
+        deducedRestaurant: null,
+        restaurantDetails: null,
         uniqueRestaurantNames,
         hasMultipleRestaurants: false
     };

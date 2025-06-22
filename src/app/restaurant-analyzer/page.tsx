@@ -78,7 +78,7 @@ export default function RestaurantAnalyzer() {
         try {
             const formData = new FormData();
 
-            const isInstagram = url.includes('instagram.com/p/');
+            const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
 
             if (isInstagram) {
                 setProgress({ step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page' });
@@ -291,7 +291,7 @@ export default function RestaurantAnalyzer() {
                                 type="url"
                                 value={url}
                                 onChange={handleUrlChange}
-                                placeholder="https://www.instagram.com/p/... or image URL"
+                                placeholder="https://www.instagram.com/p/... or https://www.instagram.com/reel/... or image URL"
                                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             />
                             <p className="mt-1 text-sm text-gray-500">

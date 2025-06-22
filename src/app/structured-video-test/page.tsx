@@ -100,7 +100,7 @@ export default function StructuredVideoTest() {
         setResult(null);
         
         // Initialize progress steps
-        const isInstagram = url.includes('instagram.com/p/');
+        const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
         const initialSteps: ProgressStep[] = isInstagram ? [
             { id: 'init', title: 'Initializing Analysis', status: 'pending', percentage: 0 },
             { id: 'screenshot', title: 'Taking Instagram Screenshots', status: 'pending', percentage: 0 },
@@ -122,7 +122,7 @@ export default function StructuredVideoTest() {
             const formData = new FormData();
             
             // Check if it's an Instagram URL
-            const isInstagram = url.includes('instagram.com/p/');
+            const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
             
             if (isInstagram) {
                 // Step 1: Initialize
@@ -479,11 +479,11 @@ export default function StructuredVideoTest() {
                                 type="url"
                                 value={url}
                                 onChange={handleUrlChange}
-                                placeholder="https://images.unsplash.com/photo-... or Instagram URL"
+                                placeholder="https://images.unsplash.com/photo-... or Instagram post/reel URL"
                                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             />
                             <p className="mt-1 text-sm text-gray-500">
-                                Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
+                                Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs (posts or reels)
                             </p>
                         </div>
 

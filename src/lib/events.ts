@@ -20,7 +20,7 @@ export interface RestaurantEvent {
     createdAt: Date;
     updatedAt: Date;
 
-    // Instagram post data
+    // Instagram content data
     instagramData?: {
         screenshots?: string[];
         captionText: string;

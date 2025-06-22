@@ -46,30 +46,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     useEffect(() => {
-        console.log('AuthProvider: Starting authentication state listener');
-
         // Add a timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
-            console.log('AuthProvider: Timeout reached, setting loading to false');
             setLoading(false);
-        }, 5000); // 5 second timeout
+        }, 5000);
 
         const unsubscribe = onAuthStateChange(async (user) => {
-            console.log('AuthProvider: Auth state changed', user ? `User: ${user.email}` : 'No user');
-
             // Clear the timeout since we got a response
             clearTimeout(timeoutId);
 
             setUser(user);
 
             if (user) {
-                console.log('AuthProvider: Fetching user profile for', user.uid);
                 try {
                     let profile = await getUserProfile(user.uid);
 
                     // If profile doesn't exist, create one with current date
                     if (!profile) {
-                        console.log('AuthProvider: No profile found, creating new profile');
                         await createUserProfile(user, {
                             displayName: user.displayName || '',
                             photoURL: user.photoURL || '',
@@ -77,7 +70,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                         profile = await getUserProfile(user.uid);
                     }
 
-                    console.log('AuthProvider: User profile fetched/created', profile);
                     setUserProfile(profile);
                 } catch (error) {
                     console.error('AuthProvider: Error with user profile', error);
@@ -86,16 +78,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     setUserProfile(null);
                 }
             } else {
-                console.log('AuthProvider: No user, clearing profile');
                 setUserProfile(null);
             }
 
-            console.log('AuthProvider: Setting loading to false');
             setLoading(false);
         });
 
         return () => {
-            console.log('AuthProvider: Cleaning up auth listener');
             clearTimeout(timeoutId);
             unsubscribe();
         };
@@ -107,8 +96,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loading,
         refreshUserProfile,
     };
-
-    console.log('AuthProvider: Current state', { user: user?.email, loading, hasProfile: !!userProfile });
 
     return (
         <AuthContext.Provider value={value}>

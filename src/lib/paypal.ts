@@ -39,10 +39,6 @@ export class PayPalService {
             throw new Error('PayPal credentials not configured. Please check PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
         }
 
-        console.log('Getting PayPal access token...');
-        console.log('PayPal mode:', this.config.mode);
-        console.log('Base URL:', this.getBaseUrl());
-
         const auth = Buffer.from(`${this.config.client_id}:${this.config.client_secret}`).toString('base64');
 
         const response = await fetch(`${this.getBaseUrl()}/v1/oauth2/token`, {
@@ -71,19 +67,11 @@ export class PayPalService {
         this.accessToken = data.access_token as string;
         this.tokenExpiry = Date.now() + (data.expires_in * 1000);
 
-        console.log('PayPal access token obtained successfully');
         return this.accessToken;
     }
 
     async createOrder(paymentRequest: PayPalPaymentRequest): Promise<PayPalOrder> {
         const accessToken = await this.getAccessToken();
-
-        console.log('Creating PayPal order with data:', {
-            reference_id: paymentRequest.id,
-            amount: paymentRequest.amount,
-            description: paymentRequest.note,
-            custom_id: paymentRequest.receiptId
-        });
 
         const orderData = {
             intent: 'CAPTURE',
@@ -108,8 +96,6 @@ export class PayPalService {
             }
         };
 
-        console.log('PayPal order data:', JSON.stringify(orderData, null, 2));
-
         const response = await fetch(`${this.getBaseUrl()}/v2/checkout/orders`, {
             method: 'POST',
             headers: {
@@ -131,7 +117,6 @@ export class PayPalService {
         }
 
         const order = await response.json();
-        console.log('PayPal order created successfully:', order.id);
         return order;
     }
 
@@ -254,8 +239,6 @@ export class PayPalService {
     async createMoneyRequest(paymentRequest: PayPalPaymentRequest): Promise<string> {
         const accessToken = await this.getAccessToken();
 
-        console.log('Creating PayPal money request for:', paymentRequest.targetPayPalEmail);
-
         // Create a simple PayPal payment link using the newer v2 API
         const orderData = {
             intent: 'CAPTURE',
@@ -303,7 +286,6 @@ export class PayPalService {
             throw new Error('No approval URL found in PayPal response');
         }
 
-        console.log('PayPal money request created successfully');
         return approvalLink.href;
     }
 

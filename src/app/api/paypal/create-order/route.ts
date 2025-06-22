@@ -21,8 +21,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'User ID required' }, { status: 401 });
         }
 
-        console.log('Processing payment request for user:', userId);
-
         const body = await request.json();
         const {
             receiptId,
@@ -32,15 +30,6 @@ export async function POST(request: NextRequest) {
             itemName,
             targetPayPalEmail
         } = body;
-
-        console.log('Payment request data:', {
-            receiptId,
-            targetUserId,
-            amount,
-            note,
-            itemName,
-            targetPayPalEmail
-        });
 
         // Validate required fields
         if (!receiptId || !targetUserId || !amount || !note) {
@@ -73,8 +62,6 @@ export async function POST(request: NextRequest) {
         const targetUserData = targetUserDoc.data();
         const targetUserName = targetUserData.displayName || targetUserData.email?.split('@')[0] || 'Unknown';
 
-        console.log('User profiles:', { requesterName, targetUserName });
-
         // Create payment request record
         const paymentRequest: Omit<PayPalPaymentRequest, 'id'> = {
             receiptId,
@@ -91,27 +78,18 @@ export async function POST(request: NextRequest) {
             targetPayPalEmail
         };
 
-        console.log('Creating payment request in Firestore...');
-
         // Store in Firestore first
         const paymentDoc = await addDoc(collection(db, 'paypal_payments'), paymentRequest);
         const paymentRequestWithId = { ...paymentRequest, id: paymentDoc.id };
 
-        console.log('Payment request stored with ID:', paymentDoc.id);
-
         // Create PayPal money request
-        console.log('Creating PayPal money request...');
         const paypalPaymentUrl = await paypalService.createMoneyRequest(paymentRequestWithId);
-
-        console.log('PayPal money request created:', paypalPaymentUrl);
 
         // Update the payment request with PayPal payment URL
         await setDoc(doc(db, 'paypal_payments', paymentDoc.id), {
             ...paymentRequest,
             paypalPaymentUrl
         }, { merge: true });
-
-        console.log('Payment request completed successfully');
 
         return NextResponse.json({
             success: true,

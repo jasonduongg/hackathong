@@ -71,7 +71,6 @@ const convertToRanges = (dayAvailability: { [hour: string]: boolean }) => {
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding }) => {
     const { user, userProfile, refreshUserProfile } = useAuth();
-    console.log('UserProfile: userProfile', userProfile);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
     const [paypalEmail, setPayPalEmail] = useState(userProfile?.paypalEmail || '');
@@ -236,7 +235,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding })
     };
 
     if (!user || !userProfile) {
-        console.log('UserProfile: Missing user or userProfile', { user: !!user, userProfile: !!userProfile });
         return <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
             <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Profile</h2>
@@ -244,15 +242,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onRestartOnboarding })
             </div>
         </div>;
     }
-
-    console.log('UserProfile: Rendering with data', {
-        displayName: userProfile.displayName,
-        email: user.email,
-        createdAt: userProfile.createdAt,
-        updatedAt: userProfile.updatedAt,
-        createdAtType: typeof userProfile.createdAt,
-        updatedAtType: typeof userProfile.updatedAt
-    });
 
     return (
         <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">

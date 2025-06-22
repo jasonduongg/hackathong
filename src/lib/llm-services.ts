@@ -5,8 +5,6 @@ import axios from 'axios';
 // Function to download image and convert to base64
 async function downloadImageAsBase64(url: string): Promise<string> {
     try {
-        console.log('Downloading image from URL:', url);
-        
         const response = await axios.get(url, {
             responseType: 'arraybuffer',
             headers: {
@@ -15,23 +13,22 @@ async function downloadImageAsBase64(url: string): Promise<string> {
             },
             timeout: 10000 // 10 second timeout
         });
-        
+
         const buffer = Buffer.from(response.data, 'binary');
         const mimeType = response.headers['content-type'] || 'image/jpeg';
-        
+
         // Validate that it's actually an image
         if (!mimeType.startsWith('image/')) {
             throw new Error(`URL does not point to an image. Content-Type: ${mimeType}`);
         }
-        
+
         // Check file size (max 10MB)
         if (buffer.length > 10 * 1024 * 1024) {
             throw new Error(`Image too large: ${Math.round(buffer.length / 1024 / 1024)}MB (max 10MB)`);
         }
-        
+
         const base64 = buffer.toString('base64');
-        
-        console.log('Image downloaded successfully, size:', buffer.length, 'bytes, type:', mimeType);
+
         return `data:${mimeType};base64,${base64}`;
     } catch (error) {
         console.error('Failed to download image:', error);
@@ -151,17 +148,17 @@ export async function processImageURL(
     locationTags?: string,
     hashtags?: string
 ) {
-    console.log('processImageURL called with:', { 
-        url, 
-        promptType, 
-        customInstructions, 
+    console.log('processImageURL called with:', {
+        url,
+        promptType,
+        customInstructions,
         hasCaptionText: !!captionText,
         hasAccountMentions: !!accountMentions,
         hasLocationTags: !!locationTags,
         hasHashtags: !!hashtags
     });
     console.log('ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
-    
+
     const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -170,7 +167,7 @@ export async function processImageURL(
         // Download the image and convert to base64
         console.log('Downloading image for analysis...');
         const base64Image = await downloadImageAsBase64(url);
-        
+
         // Get the appropriate system prompt
         const systemPrompt = getVideoPrompt(promptType as any, customInstructions) as string;
         console.log('System prompt type:', promptType);
@@ -188,23 +185,23 @@ export async function processImageURL(
                             type: "text",
                             text: (() => {
                                 let contextText = "Please analyze this image according to the system instructions provided.";
-                                
+
                                 if (captionText) {
                                     contextText += `\n\nCaption: "${captionText}"`;
                                 }
-                                
+
                                 if (accountMentions) {
                                     contextText += `\n\nAccount Mentions: ${accountMentions}`;
                                 }
-                                
+
                                 if (locationTags) {
                                     contextText += `\n\nLocation Tags: ${locationTags}`;
                                 }
-                                
+
                                 if (hashtags) {
                                     contextText += `\n\nHashtags: ${hashtags}`;
                                 }
-                                
+
                                 return contextText;
                             })()
                         },
@@ -212,10 +209,10 @@ export async function processImageURL(
                             type: "image",
                             source: {
                                 type: "base64",
-                                media_type: base64Image.includes('image/jpeg') ? "image/jpeg" : 
-                                           base64Image.includes('image/png') ? "image/png" : 
-                                           base64Image.includes('image/gif') ? "image/gif" : 
-                                           base64Image.includes('image/webp') ? "image/webp" : "image/jpeg",
+                                media_type: base64Image.includes('image/jpeg') ? "image/jpeg" :
+                                    base64Image.includes('image/png') ? "image/png" :
+                                        base64Image.includes('image/gif') ? "image/gif" :
+                                            base64Image.includes('image/webp') ? "image/webp" : "image/jpeg",
                                 data: base64Image.split(',')[1] // Remove data:image/jpeg;base64, prefix
                             }
                         }
@@ -262,7 +259,7 @@ export async function processURLWithLLM(
     });
     console.log('ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
     console.log('ANTHROPIC_API_KEY length:', process.env.ANTHROPIC_API_KEY?.length || 0);
-    
+
     // Process any image URL with caption context
     return await processImageURL(url, promptType, customInstructions, captionText, accountMentions, locationTags, hashtags);
 }
@@ -287,7 +284,7 @@ export async function processVideoFile(
         // 1. Use a video processing service to extract frames
         // 2. Use a different API that supports video
         // 3. Process the video file on the client side and send frames
-        
+
         const response = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20241022",
             max_tokens: 1000,
@@ -334,7 +331,7 @@ export async function processVideoFrames(
 
     try {
         console.log(`Processing ${frames.length} video frames with prompt type: ${promptType}`);
-        
+
         // Get the appropriate system prompt
         const systemPrompt = getVideoPrompt(promptType as any, customInstructions) as string;
 
@@ -342,7 +339,7 @@ export async function processVideoFrames(
         const frameAnalyses = await Promise.all(
             frames.map(async (frame, index) => {
                 console.log(`Processing frame ${index + 1}/${frames.length}`);
-                
+
                 try {
                     const response = await anthropic.messages.create({
                         model: "claude-3-5-sonnet-20241022",
@@ -370,7 +367,7 @@ export async function processVideoFrames(
                     });
 
                     console.log(`Frame ${index + 1} processed successfully`);
-                    
+
                     return {
                         frameIndex: index,
                         analysis: response.content[0].type === 'text' ? response.content[0].text : ''
@@ -431,20 +428,20 @@ export async function processVideoFrames(
                 if (data) {
                     // Collect foods
                     data.foods_shown.forEach((food: string) => allFoods.add(food));
-                    
+
                     // Collect tags
                     data.tags.forEach((tag: string) => allTags.add(tag));
-                    
+
                     // Collect place names
                     if (data.place_names) {
                         data.place_names.forEach((place: string) => allPlaceNames.add(place));
                     }
-                    
+
                     // Collect context clues
                     if (data.context_clues) {
                         data.context_clues.forEach((clue: string) => allContextClues.add(clue));
                     }
-                    
+
                     // Count activity types
                     const currentCount = activityTypes.get(data.activity_type) || 0;
                     activityTypes.set(data.activity_type, currentCount + 1);
@@ -485,7 +482,7 @@ export async function processVideoFrames(
             };
         } else {
             // For non-structured analysis, combine text responses
-            const combinedAnalysis = frameAnalyses.map(fa => 
+            const combinedAnalysis = frameAnalyses.map(fa =>
                 `Frame ${fa.frameIndex + 1}: ${fa.analysis}`
             ).join('\n\n');
 
@@ -574,7 +571,7 @@ export async function processImageFile(
 // Process Multiple Images (Instagram Screenshots) - OPTIMIZED
 export async function processMultipleImages(images: File[], promptType: string, enhancedContext?: string): Promise<any> {
     console.log(`Processing ${images.length} images with enhanced context`);
-    
+
     const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -583,13 +580,13 @@ export async function processMultipleImages(images: File[], promptType: string, 
         // OPTIMIZED: Use larger batch size and process fewer batches
         const batchSize = Math.min(20, images.length); // Use maximum batch size possible
         const batches = [];
-        
+
         for (let i = 0; i < images.length; i += batchSize) {
             batches.push(images.slice(i, i + batchSize));
         }
-        
+
         console.log(`Processing ${images.length} images in ${batches.length} batch(es) of ${batchSize}`);
-        
+
         // OPTIMIZED: Process all batches in parallel if possible, otherwise sequentially
         let results;
         if (batches.length === 1) {
@@ -601,7 +598,7 @@ export async function processMultipleImages(images: File[], promptType: string, 
             for (let i = 0; i < batches.length; i++) {
                 const batch = batches[i];
                 console.log(`Processing batch ${i + 1}/${batches.length}`);
-                
+
                 try {
                     const result = await processImageBatchOptimized(anthropic, batch, promptType, enhancedContext || '');
                     results.push(result);
@@ -611,12 +608,12 @@ export async function processMultipleImages(images: File[], promptType: string, 
                 }
             }
         }
-        
+
         // OPTIMIZED: Combine results more efficiently
-        const combinedAnalysis = results.map(result => 
+        const combinedAnalysis = results.map(result =>
             result.content[0].type === 'text' ? result.content[0].text : ''
         ).join('\n\n---\n\n');
-        
+
         return {
             provider: 'Anthropic Claude',
             promptType: promptType,
@@ -626,7 +623,7 @@ export async function processMultipleImages(images: File[], promptType: string, 
             imageCount: images.length,
             batchCount: batches.length
         };
-        
+
     } catch (error) {
         console.error('Anthropic API error for multiple images:', error);
         throw new Error('Failed to process multiple images with Anthropic');
@@ -636,21 +633,21 @@ export async function processMultipleImages(images: File[], promptType: string, 
 // OPTIMIZED: Streamlined batch processing
 async function processImageBatchOptimized(anthropic: Anthropic, images: File[], promptType: string, context: string): Promise<any> {
     console.log(`Processing batch of ${images.length} images`);
-    
+
     // OPTIMIZED: Convert images to base64 more efficiently
     const base64Images = await Promise.all(images.map(async (image, index) => {
         const arrayBuffer = await image.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString('base64');
         const mimeType = image.type;
-        
+
         // Ensure mimeType is a valid type for Anthropic API
         const validMimeType = mimeType === 'image/jpeg' ? 'image/jpeg' :
-                             mimeType === 'image/png' ? 'image/png' :
-                             mimeType === 'image/gif' ? 'image/gif' :
-                             mimeType === 'image/webp' ? 'image/webp' : 'image/png';
-        
+            mimeType === 'image/png' ? 'image/png' :
+                mimeType === 'image/gif' ? 'image/gif' :
+                    mimeType === 'image/webp' ? 'image/webp' : 'image/png';
+
         console.log(`Converted image ${index + 1}/${images.length} to base64 (${base64.length} bytes)`);
-        
+
         return {
             type: "image" as const,
             source: {
@@ -720,7 +717,7 @@ Return ONLY the JSON object, nothing else.`;
     // OPTIMIZED: Simplified retry logic
     let retryCount = 0;
     const maxRetries = 1; // Reduced retries for faster processing
-    
+
     while (retryCount <= maxRetries) {
         try {
             const response = await anthropic.messages.create({
@@ -732,10 +729,10 @@ Return ONLY the JSON object, nothing else.`;
 
             console.log(`Successfully processed batch of ${images.length} images`);
             return response;
-            
+
         } catch (error: any) {
             console.error(`Error processing batch:`, error.message);
-            
+
             if (retryCount < maxRetries) {
                 retryCount++;
                 console.log(`Retrying batch (attempt ${retryCount}/${maxRetries + 1})...`);
@@ -743,11 +740,11 @@ Return ONLY the JSON object, nothing else.`;
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 continue;
             }
-            
+
             throw error;
         }
     }
-    
+
     throw new Error(`Failed to process batch after ${maxRetries + 1} attempts`);
 }
 

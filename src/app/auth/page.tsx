@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignInForm } from '@/components/auth/SignInForm';
@@ -8,7 +8,8 @@ import { SignUpForm } from '@/components/auth/SignUpForm';
 import { UserProfile } from '@/components/auth/UserProfile';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
-export default function AuthPage() {
+// Separate component that uses useSearchParams
+function AuthContent() {
     const { user, loading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -131,5 +132,23 @@ export default function AuthPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// Loading fallback component
+function AuthLoading() {
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="text-lg">Loading authentication...</div>
+        </div>
+    );
+}
+
+// Main page component with Suspense boundary
+export default function AuthPage() {
+    return (
+        <Suspense fallback={<AuthLoading />}>
+            <AuthContent />
+        </Suspense>
     );
 } 

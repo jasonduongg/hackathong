@@ -125,10 +125,10 @@ async function performOptimizedRestaurantDeduction(
     const hasMultipleRestaurants = uniqueRestaurantNames.length > 1;
     if (uniqueRestaurantNames.length === 1) {
         const restaurantName = uniqueRestaurantNames[0];
-        
+
         // Get detailed restaurant information
         const placeDetails = await getPlaceDetails(restaurantName);
-        
+
         return {
             deducedRestaurant: restaurantName,
             restaurantDetails: {
@@ -148,10 +148,10 @@ async function performOptimizedRestaurantDeduction(
     }
     if (hasMultipleRestaurants) {
         const primaryRestaurant = placesToAnalyze[0];
-        
+
         // Get detailed restaurant information
         const placeDetails = await getPlaceDetails(primaryRestaurant);
-        
+
         return {
             deducedRestaurant: primaryRestaurant,
             restaurantDetails: {
@@ -174,7 +174,7 @@ async function performOptimizedRestaurantDeduction(
     const fallbackRestaurant = placesToAnalyze[0];
     if (fallbackRestaurant) {
         const placeDetails = await getPlaceDetails(fallbackRestaurant);
-        
+
         return {
             deducedRestaurant: fallbackRestaurant,
             restaurantDetails: {
@@ -192,7 +192,7 @@ async function performOptimizedRestaurantDeduction(
             hasMultipleRestaurants: false
         };
     }
-    
+
     return {
         deducedRestaurant: null,
         restaurantDetails: null,
@@ -203,7 +203,6 @@ async function performOptimizedRestaurantDeduction(
 
 export async function POST(request: NextRequest) {
     try {
-        console.log('API route called - starting request processing');
         const formData = await request.formData();
         const videoFile = formData.get('video') as File;
         const imageFile = formData.get('image') as File;
@@ -220,22 +219,6 @@ export async function POST(request: NextRequest) {
         const analysisMode = formData.get('analysisMode') as string;
         const videoDuration = formData.get('videoDuration') as string;
 
-        console.log('Processing request:', {
-            hasUrl: !!url,
-            hasVideoFile: !!videoFile,
-            hasImageFile: !!imageFile,
-            imageCount: images.length,
-            frameCount: frames.length,
-            promptType,
-            provider,
-            analysisMode,
-            hasCaptionText: !!captionText,
-            hasAccountMentions: !!accountMentions,
-            hasLocationTags: !!locationTags,
-            hasHashtags: !!hashtags,
-            videoDuration
-        });
-
         // Validate provider (only anthropic supported now)
         if (provider !== 'anthropic') {
             return NextResponse.json(
@@ -248,8 +231,6 @@ export async function POST(request: NextRequest) {
 
         // Handle multiple images (Instagram screenshots) - OPTIMIZED
         if (images && images.length > 0) {
-            console.log(`Processing ${images.length} Instagram screenshots`);
-
             // Validate all files are images
             for (const img of images) {
                 if (!img.type.startsWith('image/')) {
@@ -277,7 +258,6 @@ export async function POST(request: NextRequest) {
         }
         // Handle video frames processing
         else if (frames && frames.length > 0) {
-            console.log(`Processing ${frames.length} video frames`);
             // Process video frames
             llmResponse = await processVideoFrames(frames, promptType, customInstructions);
         }
@@ -317,7 +297,6 @@ export async function POST(request: NextRequest) {
         }
         // Handle URL processing
         else if (url) {
-            console.log('Processing URL:', url);
             // Validate URL format
             try {
                 new URL(url);
@@ -329,9 +308,7 @@ export async function POST(request: NextRequest) {
             }
 
             // Process URL with LLM
-            console.log('Calling processURLWithLLM...');
             llmResponse = await processURLWithLLM(url, promptType, customInstructions, captionText, accountMentions, locationTags, hashtags);
-            console.log('LLM response received:', llmResponse);
         }
         // Neither file nor URL provided
         else {
@@ -355,7 +332,6 @@ export async function POST(request: NextRequest) {
         let filteredPlaces: string[] = [];
 
         if (structuredData.place_names && structuredData.place_names.length > 0) {
-            console.log('Enhancing place names with search validation...');
             const enhancementResult = await enhancePlaceNamesWithSearch(
                 structuredData.place_names,
                 [...structuredData.tags, ...(structuredData.context_clues || [])]
@@ -375,7 +351,6 @@ export async function POST(request: NextRequest) {
         };
 
         // OPTIMIZED: Parallel geocoding for better performance
-        console.log('Geocoding place names...');
         const geocodingPromises = filteredPlaces.map(async (placeName) => {
             try {
                 const geocoded = await geocodeLocation(placeName);
@@ -395,7 +370,6 @@ export async function POST(request: NextRequest) {
         const geocodedPlaces = (await Promise.all(geocodingPromises)).filter(Boolean);
 
         // OPTIMIZED: Simplified restaurant deduction
-        console.log('Performing optimized restaurant deduction...');
         const { deducedRestaurant, restaurantDetails, uniqueRestaurantNames, hasMultipleRestaurants } =
             await performOptimizedRestaurantDeduction(
                 filteredPlaces,

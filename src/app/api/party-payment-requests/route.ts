@@ -6,10 +6,8 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const partyId = searchParams.get('partyId');
-        console.log('API: Received request for partyId:', partyId);
 
         if (!partyId) {
-            console.log('API: No partyId provided');
             return NextResponse.json(
                 { error: 'Party ID is required' },
                 { status: 400 }
@@ -19,13 +17,10 @@ export async function GET(request: NextRequest) {
         // First, get all receipts for this party
         const receiptsRef = collection(db, 'receipts');
         const receiptsQuery = query(receiptsRef, where('partyId', '==', partyId));
-        console.log('API: Querying receipts for party:', partyId);
         const receiptsSnapshot = await getDocs(receiptsQuery);
         const receiptIds = receiptsSnapshot.docs.map(doc => doc.id);
-        console.log('API: Found receipt IDs:', receiptIds);
 
         if (receiptIds.length === 0) {
-            console.log('API: No receipts found, returning empty array');
             return NextResponse.json({
                 success: true,
                 paymentRequests: []
@@ -36,19 +31,16 @@ export async function GET(request: NextRequest) {
         const paypalPaymentsRef = collection(db, 'paypal_payments');
 
         // Create all PayPal queries in parallel
-        console.log('API: Creating parallel queries for PayPal payment requests...');
         const paypalPaymentQueries = receiptIds.map(receiptId =>
             getDocs(query(paypalPaymentsRef, where('receiptId', '==', receiptId)))
         );
 
         // Execute all PayPal queries in parallel
-        console.log('API: Executing parallel PayPal queries...');
         const paypalSnapshots = await Promise.all(paypalPaymentQueries);
 
         const allRequests: any[] = [];
 
         // Process PayPal payment requests
-        console.log('API: Processing PayPal payment requests...');
         paypalSnapshots.forEach(snapshot => {
             snapshot.forEach(doc => {
                 allRequests.push({
@@ -59,8 +51,6 @@ export async function GET(request: NextRequest) {
             });
         });
 
-        console.log('API: Total PayPal requests found:', allRequests.length);
-
         // Sort by creation date (newest first)
         allRequests.sort((a, b) => {
             const dateA = new Date(a.createdAt).getTime();
@@ -68,7 +58,6 @@ export async function GET(request: NextRequest) {
             return dateB - dateA;
         });
 
-        console.log('API: Returning PayPal requests:', allRequests.length);
         return NextResponse.json({
             success: true,
             paymentRequests: allRequests

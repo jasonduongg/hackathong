@@ -12,16 +12,6 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Debug: Log configuration (remove in production)
-console.log('Firebase Config:', {
-    apiKey: firebaseConfig.apiKey ? '✅ Set' : '❌ Missing',
-    authDomain: firebaseConfig.authDomain ? '✅ Set' : '❌ Missing',
-    projectId: firebaseConfig.projectId ? '✅ Set' : '❌ Missing',
-    storageBucket: firebaseConfig.storageBucket ? '✅ Set' : '❌ Missing',
-    messagingSenderId: firebaseConfig.messagingSenderId ? '✅ Set' : '❌ Missing',
-    appId: firebaseConfig.appId ? '✅ Set' : '❌ Missing',
-});
-
 // Validate configuration
 const missingConfig = Object.entries(firebaseConfig).filter(([key, value]) => !value);
 if (missingConfig.length > 0) {
@@ -33,7 +23,6 @@ if (missingConfig.length > 0) {
 let app;
 try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    console.log('Firebase app initialized successfully');
 } catch (error) {
     console.error('Failed to initialize Firebase app:', error);
     throw error;
@@ -43,7 +32,6 @@ try {
 let auth;
 try {
     auth = getAuth(app);
-    console.log('Firebase Auth initialized successfully');
 } catch (error) {
     console.error('Failed to initialize Firebase Auth:', error);
     throw error;
@@ -53,7 +41,6 @@ try {
 let db: Firestore;
 try {
     db = getFirestore(app);
-    console.log('Firestore initialized successfully');
 } catch (error) {
     console.error('Failed to initialize Firestore:', error);
     throw error;
@@ -63,7 +50,6 @@ try {
 let storage: FirebaseStorage;
 try {
     storage = getStorage(app);
-    console.log('Firebase Storage initialized successfully');
 } catch (error) {
     console.error('Failed to initialize Firebase Storage:', error);
     throw error;

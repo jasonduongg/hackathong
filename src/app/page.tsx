@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import NewHero from '@/components/NewHero';
 import HowItWorks from '@/components/HowItWorks';
+import ExamplesSection from '@/components/ExamplesSection';
 import Testimonials from '@/components/ui/testimonials';
 import Footer from '@/components/ui/footer';
 
@@ -46,6 +47,11 @@ export default function Home() {
       {/* How It Works Section */}
       <section id="how-it-works" className="px-4 md:px-8 lg:px-16 py-20 scroll-mt-16 bg-soft-orange-25/50 backdrop-blur-sm">
         <HowItWorks />
+      </section>
+
+      {/* Examples Section */}
+      <section id="examples" className="px-4 md:px-8 lg:px-16 py-20 scroll-mt-16">
+        <ExamplesSection />
       </section>
 
       {/* Testimonials Section */}

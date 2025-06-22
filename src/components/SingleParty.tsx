@@ -46,6 +46,14 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
     const [invitedUserProfiles, setInvitedUserProfiles] = useState<{ [userId: string]: UserProfile }>({});
     const [activeTab, setActiveTab] = useState<TabType>('info');
+    const [showJson, setShowJson] = useState(false);
+    const [showRestaurantData, setShowRestaurantData] = useState(false);
+    const [restaurantData, setRestaurantData] = useState('');
+    const [savingRestaurantData, setSavingRestaurantData] = useState(false);
+    const [savedRestaurantData, setSavedRestaurantData] = useState('');
+    const [memberMetadata, setMemberMetadata] = useState<any>(null);
+    const [showMemberMetadata, setShowMemberMetadata] = useState(false);
+    const [loadingMetadata, setLoadingMetadata] = useState(false);
 
     useEffect(() => {
         const fetchPartyDetails = async () => {
@@ -190,6 +198,53 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
         }
     };
 
+    const handleSaveRestaurantData = async () => {
+        if (!restaurantData.trim()) {
+            alert('Please enter some JSON data');
+            return;
+        }
+
+        try {
+            setSavingRestaurantData(true);
+            
+            // Validate JSON
+            const parsedData = JSON.parse(restaurantData);
+            
+            // Save the data to the saved state
+            setSavedRestaurantData(restaurantData);
+            
+            alert('Restaurant data saved!');
+            
+        } catch (error) {
+            console.error('Error with restaurant data:', error);
+            alert('Invalid JSON format. Please check your data.');
+        } finally {
+            setSavingRestaurantData(false);
+        }
+    };
+
+    const fetchMemberMetadata = async () => {
+        if (!partyId) return;
+
+        try {
+            setLoadingMetadata(true);
+            const response = await fetch(`/api/get-same-times?partyId=${partyId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                setMemberMetadata(data);
+            } else {
+                console.error('Failed to fetch member metadata:', data.error);
+                alert('Failed to fetch member metadata');
+            }
+        } catch (error) {
+            console.error('Error fetching member metadata:', error);
+            alert('Error fetching member metadata');
+        } finally {
+            setLoadingMetadata(false);
+        }
+    };
+
     if (loading) {
         return <div className="text-center py-10">Loading party details...</div>;
     }
@@ -205,14 +260,44 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-semibold text-gray-900">Party Information</h2>
-                            {party.members && party.members.length < 4 && (
+                            <div className="flex space-x-2">
                                 <button
-                                    onClick={() => setShowInviteForm(!showInviteForm)}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+                                    onClick={() => {
+                                        setShowRestaurantData(true);
+                                        // Load saved data if it exists
+                                        if (savedRestaurantData) {
+                                            setRestaurantData(savedRestaurantData);
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700"
                                 >
-                                    {showInviteForm ? 'Cancel' : 'Invite Members'}
+                                    Restaurant Data
                                 </button>
-                            )}
+                                <button
+                                    onClick={() => {
+                                        fetchMemberMetadata();
+                                        setShowMemberMetadata(true);
+                                    }}
+                                    disabled={loadingMetadata}
+                                    className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loadingMetadata ? 'Loading...' : 'Member Metadata'}
+                                </button>
+                                <button
+                                    onClick={() => setShowJson(!showJson)}
+                                    className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700"
+                                >
+                                    {showJson ? 'Hide JSON' : 'Show JSON'}
+                                </button>
+                                {party.members && party.members.length < 4 && (
+                                    <button
+                                        onClick={() => setShowInviteForm(!showInviteForm)}
+                                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+                                    >
+                                        {showInviteForm ? 'Cancel' : 'Invite Members'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Member List */}
@@ -452,6 +537,236 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                 <div className="mt-8">
                     {renderTabContent()}
                 </div>
+
+                {/* JSON Modal */}
+                {showJson && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                                <h3 className="text-lg font-medium text-gray-900">Party JSON Data</h3>
+                                <button
+                                    onClick={() => setShowJson(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
+                                <pre className="text-sm text-gray-800 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">
+                                    {JSON.stringify(party, null, 2)}
+                                </pre>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Restaurant Data Modal */}
+                {showRestaurantData && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                                <h3 className="text-lg font-medium text-gray-900">Submit Restaurant Data</h3>
+                                <button
+                                    onClick={() => {
+                                        setShowRestaurantData(false);
+                                        setRestaurantData(''); // Clear current textarea
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="p-6">
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Restaurant Data (JSON Format)
+                                    </label>
+                                    <textarea
+                                        value={restaurantData}
+                                        onChange={(e) => setRestaurantData(e.target.value)}
+                                        placeholder="Enter JSON data here..."
+                                        className="w-full h-64 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono"
+                                    />
+                                </div>
+                                <div className="flex justify-end space-x-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowRestaurantData(false);
+                                            setRestaurantData(''); // Clear current textarea
+                                        }}
+                                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSaveRestaurantData}
+                                        disabled={savingRestaurantData}
+                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {savingRestaurantData ? 'Saving...' : 'Save Data'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Member Metadata Modal */}
+                {showMemberMetadata && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                                <h3 className="text-lg font-medium text-gray-900">Party Member Metadata</h3>
+                                <button
+                                    onClick={() => setShowMemberMetadata(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
+                                {loadingMetadata ? (
+                                    <div className="text-center py-8">
+                                        <div className="text-lg">Loading member metadata...</div>
+                                    </div>
+                                ) : memberMetadata ? (
+                                    <div className="space-y-6">
+                                        {/* Party Information */}
+                                        <div className="bg-blue-50 rounded-lg p-4">
+                                            <h4 className="text-md font-medium text-blue-900 mb-2">Party Information</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                <div>
+                                                    <span className="font-medium text-blue-800">Name:</span> {memberMetadata.party.name}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-blue-800">Description:</span> {memberMetadata.party.description}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-blue-800">Created By:</span> {memberMetadata.party.createdBy}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-blue-800">Member Count:</span> {memberMetadata.memberCount}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Member Profiles */}
+                                        <div>
+                                            <h4 className="text-md font-medium text-gray-900 mb-3">Member Profiles</h4>
+                                            <div className="space-y-4">
+                                                {memberMetadata.memberProfiles.map((member: any, index: number) => (
+                                                    <div key={member.uid} className="bg-gray-50 rounded-lg p-4">
+                                                        <div className="flex items-center space-x-3 mb-3">
+                                                            <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-medium">
+                                                                {member.displayName?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase() || 'U'}
+                                                            </div>
+                                                            <div>
+                                                                <h5 className="font-medium text-gray-900">{member.displayName || 'Unknown User'}</h5>
+                                                                <p className="text-sm text-gray-500">{member.email}</p>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Job:</span> {member.job || 'Not specified'}
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Location:</span> {member.location || 'Not specified'}
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Bio:</span> {member.bio || 'Not specified'}
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Dietary Restrictions:</span>
+                                                                <div className="mt-1">
+                                                                    {member.dietaryRestrictions?.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {member.dietaryRestrictions.map((restriction: string, i: number) => (
+                                                                                <span key={i} className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                                                                                    {restriction}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-500">None</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Food Preferences:</span>
+                                                                <div className="mt-1">
+                                                                    {member.foodPreferences?.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {member.foodPreferences.map((preference: string, i: number) => (
+                                                                                <span key={i} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                                                    {preference}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-500">None</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium text-gray-700">Activity Preferences:</span>
+                                                                <div className="mt-1">
+                                                                    {member.activityPreferences?.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {member.activityPreferences.map((preference: string, i: number) => (
+                                                                                <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                                                                    {preference}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-500">None</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Availability */}
+                                                        {member.availability && Object.keys(member.availability).length > 0 && (
+                                                            <div className="mt-3">
+                                                                <span className="font-medium text-gray-700">Availability:</span>
+                                                                <div className="mt-1 text-xs">
+                                                                    <pre className="bg-white p-2 rounded border overflow-x-auto">
+                                                                        {JSON.stringify(member.availability, null, 2)}
+                                                                    </pre>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Raw JSON Data */}
+                                        <div>
+                                            <h4 className="text-md font-medium text-gray-900 mb-3">Raw API Response</h4>
+                                            <div className="bg-gray-50 rounded-lg p-4">
+                                                <pre className="text-xs text-gray-800 overflow-x-auto whitespace-pre-wrap">
+                                                    {JSON.stringify(memberMetadata, null, 2)}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <div className="text-lg text-gray-500">No member metadata available</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </PartyProvider>
     );

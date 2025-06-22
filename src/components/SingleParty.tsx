@@ -443,6 +443,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                     {memberProfiles.find((p: UserProfile) => p.uid === party.createdBy)?.displayName || 'Unknown'}
                                 </p>
                             </div>
+                        </div>
                         <div className="mb-6">
                             <p className="text-gray-600">{party.description}</p>
                         </div>
@@ -907,7 +908,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 <nav className="-mb-px flex space-x-8">
                     <button
                         onClick={() => setActiveTab('info')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${((activeTab as any) === 'info')
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
@@ -916,7 +917,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     </button>
                     <button
                         onClick={() => setActiveTab('before-flow')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'before-flow'
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${((activeTab as any) === 'before-flow')
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
@@ -934,7 +935,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     </button>
                     <button
                         onClick={() => setActiveTab('receipts')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${((activeTab as any) === 'receipts')
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
@@ -952,7 +953,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     </button>
                     <button
                         onClick={() => setActiveTab('requests')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'requests'
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${((activeTab as any) === 'requests')
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
@@ -999,9 +1000,9 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             )}
 
             {selectedUserForModal && (
-                <UserMetadataModal 
-                    userProfile={selectedUserForModal} 
-                    onClose={() => setSelectedUserForModal(null)} 
+                <UserMetadataModal
+                    userProfile={selectedUserForModal}
+                    onClose={() => setSelectedUserForModal(null)}
                 />
             )}
 
@@ -1310,6 +1311,7 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
 
 // Simple Modal for User Metadata
 const UserMetadataModal: React.FC<{ userProfile: UserProfile; onClose: () => void }> = ({ userProfile, onClose }) => {
+    if (!userProfile) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">

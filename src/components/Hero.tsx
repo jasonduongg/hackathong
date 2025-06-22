@@ -26,7 +26,7 @@ export default function Hero() {
 
                 {/* Subtitle */}
                 <p className="text-xl md:text-2xl text-gray-700 mb-12 max-w-3xl leading-relaxed">
-                    Stop worrying about who owes what. Our smart video analysis automatically detects receipts and splits expenses with your friends.
+                    AI-powered planning before your trip, automatic expense splitting after. The complete group travel experience.
                 </p>
 
                 {/* CTA Buttons */}

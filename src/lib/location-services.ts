@@ -121,16 +121,14 @@ export async function geocodeLocation(placeName: string): Promise<LocationData |
 // Extract potential location names from text using common patterns
 function extractLocationNames(text: string): string[] {
     const locationPatterns = [
-        // Restaurant/cafe patterns
+        // Restaurant/cafe patterns - PRIORITY
         /(?:at|from|in|to)\s+([A-Z][a-zA-Z\s&'-]+(?:Restaurant|Cafe|Coffee|Bar|Pizza|Burger|Sushi|Diner|Bistro|Grill|Kitchen))/gi,
-        // Business names with common suffixes
-        /([A-Z][a-zA-Z\s&'-]+(?:Starbucks|McDonald's|Subway|KFC|Pizza Hut|Domino's|Burger King|Wendy's|Taco Bell))/gi,
-        // Location hashtags
+        // Business names with common suffixes - PRIORITY
+        /([A-Z][a-zA-Z\s&'-]+(?:Starbucks|McDonald's|Subway|KFC|Pizza Hut|Domino's|Burger King|Wendy's|Taco Bell|Shake Shack|Five Guys|In-N-Out|Chipotle))/gi,
+        // Food-related business patterns
+        /([A-Z][a-zA-Z\s&'-]+(?:Bakery|Deli|Food|Eat|Dining|Shack|Kitchen|Grill))/gi,
+        // Location hashtags (for context, not as place names)
         /#([a-zA-Z0-9]+(?:nyc|london|paris|tokyo|dubai|singapore|sydney|toronto|vancouver|miami|la|sf|chicago|boston|dc))/gi,
-        // General location mentions
-        /(?:at|in|to|from)\s+([A-Z][a-zA-Z\s&'-]+(?:Park|Mall|Center|Plaza|Square|Street|Avenue|Road))/gi,
-        // Specific landmarks
-        /([A-Z][a-zA-Z\s&'-]+(?:Central Park|Times Square|Eiffel Tower|Big Ben|Statue of Liberty|Golden Gate Bridge))/gi
     ];
 
     const locations = new Set<string>();
@@ -140,7 +138,20 @@ function extractLocationNames(text: string): string[] {
         while ((match = pattern.exec(text)) !== null) {
             const location = match[1]?.trim();
             if (location && location.length > 2) {
-                locations.add(location);
+                // Filter out landmarks and tourist attractions
+                const lowerLocation = location.toLowerCase();
+                const landmarkKeywords = [
+                    'bridge', 'park', 'square', 'plaza', 'monument', 'statue', 'tower', 'building', 'museum', 
+                    'gallery', 'theater', 'stadium', 'arena', 'airport', 'station', 'terminal', 'harbor', 
+                    'beach', 'mountain', 'lake', 'river', 'canyon', 'valley', 'island', 'peninsula',
+                    'golden gate', 'times square', 'central park', 'eiffel tower', 'statue of liberty',
+                    'empire state', 'chrysler building', 'brooklyn bridge', 'manhattan bridge'
+                ];
+                
+                const isLandmark = landmarkKeywords.some(keyword => lowerLocation.includes(keyword));
+                if (!isLandmark) {
+                    locations.add(location);
+                }
             }
         }
     });
@@ -355,10 +366,40 @@ export const enhancePlaceNamesWithSearch = async (placeNames: string[], contextT
     }>;
     filteredPlaces: string[];
 }> => {
+    // Filter out landmarks and tourist attractions
+    const landmarkKeywords = [
+        'bridge', 'park', 'square', 'plaza', 'monument', 'statue', 'tower', 'building', 'museum', 
+        'gallery', 'theater', 'stadium', 'arena', 'airport', 'station', 'terminal', 'harbor', 
+        'beach', 'mountain', 'lake', 'river', 'canyon', 'valley', 'island', 'peninsula',
+        'golden gate', 'times square', 'central park', 'eiffel tower', 'statue of liberty',
+        'empire state', 'chrysler building', 'brooklyn bridge', 'manhattan bridge'
+    ];
+    
+    const businessKeywords = [
+        'restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco', 
+        'burger', 'sushi', 'coffee', 'bakery', 'deli', 'food', 'eat', 'dining', 'shack',
+        'mcdonalds', 'starbucks', 'chipotle', 'subway', 'kfc', 'pizza hut', 'dominos',
+        'burger king', 'wendys', 'taco bell', 'shake shack', 'five guys', 'in-n-out'
+    ];
+    
+    // Filter places to only include business-like names
+    const businessPlaces = placeNames.filter(place => {
+        const lowerPlace = place.toLowerCase();
+        // Include if it contains business keywords
+        const hasBusinessKeyword = businessKeywords.some(keyword => lowerPlace.includes(keyword));
+        // Exclude if it contains landmark keywords
+        const hasLandmarkKeyword = landmarkKeywords.some(keyword => lowerPlace.includes(keyword));
+        
+        return hasBusinessKeyword && !hasLandmarkKeyword;
+    });
+    
+    // If no business places found, use all places but prioritize business-like names
+    const placesToProcess = businessPlaces.length > 0 ? businessPlaces : placeNames;
+    
     const enhancedPlaces = [];
     const filteredPlaces = [];
     
-    for (const placeName of placeNames) {
+    for (const placeName of placesToProcess) {
         const validation = await validatePlaceName(placeName, contextTags);
         
         const enhancedPlace = {
@@ -373,11 +414,72 @@ export const enhancePlaceNamesWithSearch = async (placeNames: string[], contextT
         
         enhancedPlaces.push(enhancedPlace);
         
-        // Include all places with some confidence (more lenient)
+        // Include places with confidence, but prioritize business-like names
         if (validation.confidence > 0.05) {
-            filteredPlaces.push(placeName);
+            // If we have business places, only include those
+            if (businessPlaces.length > 0) {
+                if (businessPlaces.includes(placeName)) {
+                    filteredPlaces.push(placeName);
+                }
+            } else {
+                // If no business places, include all with confidence
+                filteredPlaces.push(placeName);
+            }
         }
     }
     
     return { enhancedPlaces, filteredPlaces };
-}; 
+};
+
+// Get detailed information about a specific place
+export async function getPlaceDetails(searchQuery: string): Promise<any> {
+    try {
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+            console.error('Google Maps API key not found');
+            return null;
+        }
+
+        // First, search for the place to get the place_id
+        const searchResponse = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+            params: {
+                query: searchQuery,
+                key: apiKey,
+                type: 'restaurant|food',
+                maxResults: 1
+            }
+        });
+
+        const searchData = searchResponse.data;
+        
+        if (searchData.status === 'OK' && searchData.results && searchData.results.length > 0) {
+            const placeId = searchData.results[0].place_id;
+            console.log(`Found place ID: ${placeId} for query: ${searchQuery}`);
+            
+            // Now get detailed information using the place_id
+            const detailsResponse = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
+                params: {
+                    place_id: placeId,
+                    key: apiKey,
+                    fields: 'name,formatted_address,website,formatted_phone_number,opening_hours,rating,place_id'
+                }
+            });
+
+            const detailsData = detailsResponse.data;
+            
+            if (detailsData.status === 'OK' && detailsData.result) {
+                console.log(`Retrieved details for: ${detailsData.result.name}`);
+                return detailsData.result;
+            } else {
+                console.log(`Place details API returned status: ${detailsData.status}`);
+                return null;
+            }
+        } else {
+            console.log(`Place search returned status: ${searchData.status} for query: ${searchQuery}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error getting place details:', error);
+        return null;
+    }
+} 

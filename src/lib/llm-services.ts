@@ -251,10 +251,10 @@ export async function processURLWithLLM(
     locationTags?: string,
     hashtags?: string
 ) {
-    console.log('processURLWithLLM called with:', { 
-        url, 
-        promptType, 
-        customInstructions, 
+    console.log('processURLWithLLM called with:', {
+        url,
+        promptType,
+        customInstructions,
         hasCaptionText: !!captionText,
         hasAccountMentions: !!accountMentions,
         hasLocationTags: !!locationTags,
@@ -572,11 +572,7 @@ export async function processImageFile(
 }
 
 // Process Multiple Images (Instagram Screenshots)
-export async function processMultipleImages(
-    images: File[],
-    promptType: string = 'general',
-    enhancedContext?: string
-) {
+export async function processMultipleImages(images: File[], promptType: string, enhancedContext?: string): Promise<any> {
     console.log(`Processing ${images.length} images with enhanced context`);
     
     const anthropic = new Anthropic({
@@ -584,57 +580,76 @@ export async function processMultipleImages(
     });
 
     try {
-        // Get the appropriate system prompt
-        const systemPrompt = getVideoPrompt(promptType as any) as string;
+        // Process images in larger batches to maximize efficiency
+        const batchSize = 15; // Increased from 3 to 15 (Claude Sonnet can handle up to 20)
+        const batches = [];
         
-        // Check if we have too many images (Anthropic has size limits)
-        const maxImagesPerRequest = 5; // Conservative limit to avoid size issues
-        
-        if (images.length <= maxImagesPerRequest) {
-            // Process all images in one request
-            return await processImageBatch(anthropic, images, systemPrompt, enhancedContext);
-        } else {
-            // Process images in batches and combine results
-            console.log(`Too many images (${images.length}), processing in batches of ${maxImagesPerRequest}`);
-            
-            const batches = [];
-            for (let i = 0; i < images.length; i += maxImagesPerRequest) {
-                batches.push(images.slice(i, i + maxImagesPerRequest));
-            }
-            
-            console.log(`Processing ${batches.length} batches`);
-            
-            const batchResults = [];
-            for (let i = 0; i < batches.length; i++) {
-                console.log(`Processing batch ${i + 1}/${batches.length}`);
-                const batchResult = await processImageBatch(anthropic, batches[i], systemPrompt, enhancedContext);
-                batchResults.push(batchResult);
-            }
-            
-            // Combine results from all batches
-            return combineBatchResults(batchResults, images.length);
+        for (let i = 0; i < images.length; i += batchSize) {
+            batches.push(images.slice(i, i + batchSize));
         }
+        
+        console.log(`Too many images (${images.length}), processing in batches of ${batchSize}`);
+        console.log(`Processing ${batches.length} batches`);
+        
+        const results = [];
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            console.log(`Processing batch ${i + 1}/${batches.length}`);
+            
+            try {
+                const result = await processImageBatch(anthropic, batch, i + 1, batches.length, promptType, enhancedContext || '');
+                results.push(result);
+            } catch (error) {
+                console.error(`Failed to process batch ${i + 1}:`, error);
+                throw error;
+            }
+        }
+        
+        // Combine results from all batches
+        const combinedAnalysis = results.map(result => 
+            result.content[0].type === 'text' ? result.content[0].text : ''
+        ).join('\n\n---\n\n');
+        
+        return {
+            provider: 'Anthropic Claude',
+            promptType: promptType,
+            analysis: combinedAnalysis,
+            timestamp: new Date().toISOString(),
+            source: 'instagram_screenshots',
+            imageCount: images.length,
+            batchCount: batches.length
+        };
+        
     } catch (error) {
         console.error('Anthropic API error for multiple images:', error);
         throw new Error('Failed to process multiple images with Anthropic');
     }
 }
 
-// Process a single batch of images
-async function processImageBatch(
-    anthropic: Anthropic,
-    images: File[],
-    systemPrompt: string,
-    enhancedContext?: string
-) {
-    // Convert all images to base64
-    const imageContents = [];
+// Helper function to delay execution
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Helper function to parse retry-after header
+function parseRetryAfter(retryAfter: string): number {
+    const seconds = parseInt(retryAfter);
+    if (!isNaN(seconds)) {
+        return seconds * 1000; // Convert to milliseconds
+    }
+    return 60000; // Default to 60 seconds if parsing fails
+}
+
+async function processImageBatch(anthropic: Anthropic, images: File[], batchIndex: number, totalBatches: number, promptType: string, context: string): Promise<any> {
+    console.log(`Processing batch ${batchIndex}/${totalBatches}`);
+    
+    // Convert images to base64
+    const base64Images = [];
     for (let i = 0; i < images.length; i++) {
         const image = images[i];
         const arrayBuffer = await image.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString('base64');
-        const mimeType = image.type || 'image/png';
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+        const mimeType = image.type;
         
         // Ensure mimeType is a valid type for Anthropic API
         const validMimeType = mimeType === 'image/jpeg' ? 'image/jpeg' :
@@ -642,152 +657,93 @@ async function processImageBatch(
                              mimeType === 'image/gif' ? 'image/gif' :
                              mimeType === 'image/webp' ? 'image/webp' : 'image/png';
         
-        imageContents.push({
-            type: "image",
+        base64Images.push({
+            type: "image" as const,
             source: {
                 type: "base64" as const,
                 media_type: validMimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
                 data: base64
             }
         });
-        
-        console.log(`Converted image ${i + 1}/${images.length} to base64 (${buffer.length} bytes)`);
+        console.log(`Converted image ${i + 1}/${images.length} to base64 (${base64.length} bytes)`);
     }
 
-    // Create enhanced user message
-    const userMessage = [
-        {
-            type: "text" as const,
-            text: `Please analyze these ${images.length} screenshots from an Instagram video together to provide a comprehensive understanding of the content. Consider the progression and changes across all screenshots.
+    const systemPrompt = `You are an expert content analyzer. Analyze the provided images and extract structured information about restaurants, food, and locations.
 
-${enhancedContext || ''}
+${context}
 
-Analyze all screenshots as a cohesive video sequence and provide detailed insights about:
-- Places, locations, and landmarks visible across the video
-- Activities and actions taking place
-- Foods, drinks, or consumables shown
-- Overall context and narrative of the video
-- Any notable changes or progression throughout the video
+CRITICAL: You MUST return your response in valid JSON format only. No other text.
 
-Please provide your analysis in the structured JSON format as specified in the system prompt.`
-        },
-        ...imageContents.map(img => ({
-            type: "image" as const,
-            source: img.source
-        }))
-    ];
+IMPORTANT: A single video can feature MULTIPLE different restaurants and locations. Look carefully for:
+- Different restaurant names, logos, or signage
+- Different locations, neighborhoods, or cities
+- Different price points or restaurant types
+- Different food styles or cuisines
+- Any text, captions, or mentions that indicate different places
 
-    const response = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [
-            {
-                role: "user",
-                content: userMessage
-            }
-        ]
-    });
-
-    return {
-        provider: 'Anthropic Claude',
-        promptType: 'structured',
-        analysis: response.content[0].type === 'text' ? response.content[0].text : '',
-        timestamp: new Date().toISOString(),
-        source: 'instagram_screenshots',
-        imageCount: images.length
-    };
+Return a JSON object with this exact structure:
+{
+  "place_names": ["list", "of", "ALL", "restaurant", "names", "and", "locations", "found"],
+  "multiple_locations": true/false,
+  "activity_type": "restaurant_review" or "food_showcase" or "food_tour" or "other",
+  "foods_shown": ["list", "of", "food", "items"],
+  "tags": ["relevant", "tags", "and", "keywords"],
+  "context_clues": ["additional", "context", "information"]
 }
 
-// Combine results from multiple batches
-function combineBatchResults(batchResults: any[], totalImageCount: number) {
-    console.log(`Combining results from ${batchResults.length} batches`);
+Focus on identifying:
+- ALL restaurant names and brands mentioned or visible
+- Food items and dishes shown
+- Location information for each place
+- Business details and distinguishing features
+- Any text, signage, or captions that indicate different locations
+- Price points or restaurant types that suggest different establishments
+
+If you see multiple restaurants (e.g., "Super Duper Burgers", "Trill Burgers", "4505 BBQ"), list ALL of them in place_names.
+
+Return ONLY the JSON object, nothing else.`;
+
+    const messages = [
+        {
+            role: "user" as const,
+            content: [
+                {
+                    type: "text" as const,
+                    text: `Analyze these ${images.length} images from a video. Look for restaurant names, food items, locations, and any relevant business information. Return ONLY a valid JSON object.`
+                },
+                ...base64Images
+            ]
+        }
+    ];
+
+    // Simple retry logic without delays
+    let retryCount = 0;
+    const maxRetries = 2;
     
-    // Parse each batch result
-    const parsedResults = batchResults.map(result => {
+    while (retryCount <= maxRetries) {
         try {
-            const jsonMatch = result.analysis.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+            const response = await anthropic.messages.create({
+                model: "claude-3-5-sonnet-20241022",
+                max_tokens: 1500,
+                system: systemPrompt,
+                messages: messages
+            });
+
+            console.log(`Successfully processed batch ${batchIndex}/${totalBatches}`);
+            return response;
+            
+        } catch (error: any) {
+            console.error(`Error processing batch ${batchIndex}:`, error.message);
+            
+            if (retryCount < maxRetries) {
+                retryCount++;
+                console.log(`Retrying batch ${batchIndex} (attempt ${retryCount}/${maxRetries + 1})...`);
+                continue;
             }
-        } catch (error) {
-            console.error('Error parsing batch result:', error);
+            
+            throw error;
         }
-        return null;
-    }).filter(Boolean);
-    
-    if (parsedResults.length === 0) {
-        // Fallback: return the first batch result
-        return batchResults[0];
     }
     
-    // Combine the results intelligently
-    const combined: {
-        place_names: string[];
-        multiple_locations: boolean;
-        activity_type: string;
-        foods_shown: string[];
-        tags: string[];
-        context_clues: string[];
-    } = {
-        place_names: [],
-        multiple_locations: false,
-        activity_type: 'other',
-        foods_shown: [],
-        tags: [],
-        context_clues: []
-    };
-    
-    // Combine arrays (remove duplicates)
-    const allPlaceNames = new Set<string>();
-    const allFoods = new Set<string>();
-    const allTags = new Set<string>();
-    const allContextClues = new Set<string>();
-    
-    parsedResults.forEach(result => {
-        if (result.place_names) {
-            result.place_names.forEach((place: string) => allPlaceNames.add(place));
-        }
-        if (result.foods_shown) {
-            result.foods_shown.forEach((food: string) => allFoods.add(food));
-        }
-        if (result.tags) {
-            result.tags.forEach((tag: string) => allTags.add(tag));
-        }
-        if (result.context_clues) {
-            result.context_clues.forEach((clue: string) => allContextClues.add(clue));
-        }
-    });
-    
-    combined.place_names = Array.from(allPlaceNames);
-    combined.foods_shown = Array.from(allFoods);
-    combined.tags = Array.from(allTags);
-    combined.context_clues = Array.from(allContextClues);
-    
-    // For activity_type, use the most common one or default to 'other'
-    const activityTypes = parsedResults.map(r => r.activity_type).filter(Boolean);
-    if (activityTypes.length > 0) {
-        const activityCounts: { [key: string]: number } = {};
-        activityTypes.forEach(type => {
-            activityCounts[type] = (activityCounts[type] || 0) + 1;
-        });
-        const mostCommon = Object.entries(activityCounts).sort((a, b) => b[1] - a[1])[0];
-        combined.activity_type = mostCommon ? mostCommon[0] : 'other';
-    }
-    
-    // For multiple_locations, if any batch says true, then true
-    combined.multiple_locations = parsedResults.some(r => r.multiple_locations === true);
-    
-    // Convert back to string format for the API response
-    const combinedAnalysis = JSON.stringify(combined, null, 2);
-    
-    return {
-        provider: 'Anthropic Claude',
-        promptType: 'structured',
-        analysis: combinedAnalysis,
-        timestamp: new Date().toISOString(),
-        source: 'instagram_screenshots_combined',
-        imageCount: totalImageCount,
-        batchCount: batchResults.length
-    };
+    throw new Error(`Failed to process batch ${batchIndex} after ${maxRetries + 1} attempts`);
 } 

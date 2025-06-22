@@ -5,9 +5,6 @@ import { StructuredVideoData, parseStructuredVideoData } from '@/lib/prompts';
 
 export default function StructuredVideoTest() {
     const [url, setUrl] = useState<string>('');
-    const [videoFile, setVideoFile] = useState<File | null>(null);
-    const [instagramScreenshot, setInstagramScreenshot] = useState<File | null>(null);
-    const [inputMode, setInputMode] = useState<'url' | 'file' | 'instagram'>('url');
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState<{step: string, percentage: number, details?: string}>({step: '', percentage: 0});
     const [result, setResult] = useState<StructuredVideoData | null>(null);
@@ -24,71 +21,21 @@ export default function StructuredVideoTest() {
     } | null>(null);
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const inputUrl = e.target.value;
-        setUrl(inputUrl);
-        
-        // Clear any previous errors when user types
+        setUrl(e.target.value);
         setError(null);
-    };
-
-    const handleTestImage = async () => {
-        const testUrl = 'https://images.pexels.com/photos/825661/pexels-photo-825661.jpeg';
-        setUrl(testUrl);
-        
-        // Clear any previous errors
-        setError(null);
-        setResult(null);
-        
-        // Automatically submit the form
-        setLoading(true);
-        
-        try {
-            const formData = new FormData();
-            formData.append('url', testUrl);
-            formData.append('promptType', 'structured');
-            formData.append('provider', 'anthropic');
-
-            console.log('Submitting test URL:', testUrl);
-
-            const response = await fetch('/api/process-video', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            console.log('API Response:', data);
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to process content');
-            }
-
-            // Use the enhanced structured data from the API
-            if (data.structuredData) {
-                setResult(data.structuredData);
-            } else {
-                setError('Failed to get structured data from API response');
-            }
-        } catch (err) {
-            console.error('Error details:', err);
-            console.error('Error message:', err instanceof Error ? err.message : 'Unknown error');
-            console.error('Error stack:', err instanceof Error ? err.stack : 'No stack trace');
-            setError(err instanceof Error ? err.message : 'An error occurred');
-        } finally {
-            setLoading(false);
-        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
         if (!url.trim()) {
             setError('Please enter a URL');
             return;
         }
 
         // Basic URL validation
-        let parsedUrl: URL;
         try {
-            parsedUrl = new URL(url);
+            new URL(url);
         } catch {
             setError('Please enter a valid URL');
             return;
@@ -102,176 +49,165 @@ export default function StructuredVideoTest() {
         try {
             const formData = new FormData();
             
-            if (inputMode === 'url') {
-                setProgress({step: 'Validating URL...', percentage: 10});
-                
-                // Check if it's an Instagram URL
-                let isInstagram = url.includes('instagram.com/p/');
-                if (isInstagram) {
-                    setProgress({step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page'});
-                    
-                    // Step 1: Get screenshot from backend
-                    const screenshotRes = await fetch('/api/screenshot-instagram', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url })
-                    });
-                    const screenshotData = await screenshotRes.json();
-                    if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
-                        throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
-                    }
-                    
-                    // Store Instagram data for display
-                    setInstagramData({
-                        screenshots: screenshotData.screenshots || [screenshotData.image],
-                        captionText: screenshotData.captionText || '',
-                        accountMentions: screenshotData.accountMentions || [],
-                        locationTags: screenshotData.locationTags || [],
-                        hashtags: screenshotData.hashtags || [],
-                        allText: screenshotData.allText || '',
-                        screenshotCount: screenshotData.screenshotCount || 1,
-                        videoDuration: screenshotData.videoDuration || 0
-                    });
-                    
-                    const durationText = screenshotData.videoDuration > 0 
-                        ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
-                        : ` (${screenshotData.screenshotCount} screenshots)`;
-                    
-                    setProgress({step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully'});
-                    
-                    // Step 2: Send ALL screenshots for analysis (not just the first one)
-                    setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 50, details: 'Preparing screenshots for AI analysis'});
-                    
-                    // Create a combined analysis request with all screenshots
-                    const analysisFormData = new FormData();
-                    
-                    // Add all screenshots
-                    screenshotData.screenshots.forEach((screenshot: string, index: number) => {
-                        const byteString = atob(screenshot);
-                        const ab = new ArrayBuffer(byteString.length);
-                        const ia = new Uint8Array(ab);
-                        for (let i = 0; i < byteString.length; i++) {
-                            ia[i] = byteString.charCodeAt(i);
-                        }
-                        const blob = new Blob([ab], { type: 'image/png' });
-                        analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
-                    });
-                    
-                    analysisFormData.append('promptType', 'structured');
-                    analysisFormData.append('provider', 'anthropic');
-                    analysisFormData.append('analysisMode', 'multi-screenshot');
-                    
-                    // Add caption text for better context
-                    if (screenshotData.captionText) {
-                        analysisFormData.append('captionText', screenshotData.captionText);
-                        console.log('Added caption text for context:', screenshotData.captionText.substring(0, 100) + '...');
-                    }
-                    
-                    // Add all extracted Instagram data
-                    if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
-                        analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
-                        console.log('Added account mentions:', screenshotData.accountMentions);
-                    }
-                    
-                    if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
-                        analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
-                        console.log('Added location tags:', screenshotData.locationTags);
-                    }
-                    
-                    if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
-                        analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
-                        console.log('Added hashtags:', screenshotData.hashtags.slice(0, 5));
-                    }
-                    
-                    // Add video duration for context
-                    if (screenshotData.videoDuration > 0) {
-                        analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
-                        console.log('Added video duration:', screenshotData.videoDuration);
-                    }
-                    
-                    setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis'});
-                    
-                    const response = await fetch('/api/process-video', {
-                        method: 'POST',
-                        body: analysisFormData
-                    });
-
-                    setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
-
-                    const data = await response.json();
-                    console.log('API Response:', data);
-
-                    if (!response.ok) {
-                        throw new Error(data.error || 'Failed to process content');
-                    }
-
-                    // Use the enhanced structured data from the API
-                    if (data.structuredData) {
-                        setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
-                        setResult(data.structuredData);
-                    } else {
-                        setError('Failed to get structured data from API response');
-                    }
-                } else {
-                    // Skip URL validation for now - let the API handle it
-                    formData.append('url', url);
-                    formData.append('promptType', 'structured');
-                    formData.append('provider', 'anthropic');
-                }
-            } else {
-                // Extract frames from video file
-                setProgress({step: 'Extracting video frames...', percentage: 10, details: 'Loading video file'});
-                
-                try {
-                    const frames = await extractVideoFrames(videoFile!);
-                    console.log(`Extracted ${frames.length} frames from video`);
-                    
-                    if (frames.length === 0) {
-                        throw new Error('No frames were extracted from the video');
-                    }
-                    
-                    setProgress({step: 'Preparing frames for analysis...', percentage: 50, details: `${frames.length} frames ready`});
-                    
-                    // Send frames for processing
-                    frames.forEach((frame, index) => {
-                        console.log(`Adding frame ${index + 1} to form data (length: ${frame.length})`);
-                        formData.append('frames', frame);
-                    });
-                } catch (frameError) {
-                    console.error('Frame extraction error:', frameError);
-                    throw new Error(`Failed to extract frames from video: ${frameError instanceof Error ? frameError.message : 'Unknown error'}`);
-                }
-            }
+            // Check if it's an Instagram URL
+            const isInstagram = url.includes('instagram.com/p/');
             
-            setProgress({step: 'Analyzing content with AI...', percentage: 70, details: 'Processing with Claude'});
-            console.log('Submitting:', inputMode === 'url' ? `URL: ${url}` : `Video frames: ${videoFile?.name}`);
+            if (isInstagram) {
+                setProgress({step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page'});
+                
+                // Step 1: Get screenshot from backend
+                const screenshotRes = await fetch('/api/screenshot-instagram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const screenshotData = await screenshotRes.json();
+                if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
+                    throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
+                }
+                
+                // Store Instagram data for display
+                setInstagramData({
+                    screenshots: screenshotData.screenshots || [screenshotData.image],
+                    captionText: screenshotData.captionText || '',
+                    accountMentions: screenshotData.accountMentions || [],
+                    locationTags: screenshotData.locationTags || [],
+                    hashtags: screenshotData.hashtags || [],
+                    allText: screenshotData.allText || '',
+                    screenshotCount: screenshotData.screenshotCount || 1,
+                    videoDuration: screenshotData.videoDuration || 0
+                });
+                
+                const durationText = screenshotData.videoDuration > 0 
+                    ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
+                    : ` (${screenshotData.screenshotCount} screenshots)`;
+                
+                setProgress({step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully'});
+                
+                // Step 2: Send ALL screenshots for analysis
+                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 50, details: 'Preparing screenshots for AI analysis'});
+                
+                // Create a combined analysis request with all screenshots
+                const analysisFormData = new FormData();
+                
+                // Add all screenshots
+                screenshotData.screenshots.forEach((screenshot: string, index: number) => {
+                    const byteString = atob(screenshot);
+                    const ab = new ArrayBuffer(byteString.length);
+                    const ia = new Uint8Array(ab);
+                    for (let i = 0; i < byteString.length; i++) {
+                        ia[i] = byteString.charCodeAt(i);
+                    }
+                    const blob = new Blob([ab], { type: 'image/png' });
+                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
+                });
+                
+                analysisFormData.append('promptType', 'structured');
+                analysisFormData.append('provider', 'anthropic');
+                analysisFormData.append('analysisMode', 'multi-screenshot');
+                
+                // Add caption text for better context
+                if (screenshotData.captionText) {
+                    analysisFormData.append('captionText', screenshotData.captionText);
+                    console.log('Added caption text for context:', screenshotData.captionText.substring(0, 100) + '...');
+                }
+                
+                // Add all extracted Instagram data
+                if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
+                    analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
+                    console.log('Added account mentions:', screenshotData.accountMentions);
+                }
+                
+                if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
+                    analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
+                    console.log('Added location tags:', screenshotData.locationTags);
+                }
+                
+                if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
+                    analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
+                    console.log('Added hashtags:', screenshotData.hashtags.slice(0, 5));
+                }
+                
+                // Add video duration for context
+                if (screenshotData.videoDuration > 0) {
+                    analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
+                    console.log('Added video duration:', screenshotData.videoDuration);
+                }
+                
+                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis'});
+                
+                const response = await fetch('/api/process-video', {
+                    method: 'POST',
+                    body: analysisFormData
+                });
 
-            const response = await fetch('/api/process-video', {
-                method: 'POST',
-                body: formData
-            });
+                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
 
-            setProgress({step: 'Processing results...', percentage: 90, details: 'Finalizing analysis'});
+                const data = await response.json();
+                console.log('API Response:', data);
 
-            const data = await response.json();
-            console.log('API Response:', data);
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process content');
+                }
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to process content');
-            }
-
-            // Use the enhanced structured data from the API
-            if (data.structuredData) {
-                setProgress({step: 'Analysis complete!', percentage: 100, details: 'All done!'});
-                setResult(data.structuredData);
+                // Use the enhanced structured data from the API
+                if (data.structuredData) {
+                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
+                    // Combine structuredData with other top-level fields
+                    setResult({
+                        ...data.structuredData,
+                        deducedRestaurant: data.deducedRestaurant,
+                        restaurantDetails: data.restaurantDetails,
+                        enhanced_places: data.enhanced_places,
+                        geocodedPlaces: data.geocodedPlaces,
+                        processingInfo: data.processingInfo
+                    });
+                } else {
+                    setError('Failed to get structured data from API response');
+                }
             } else {
-                setError('Failed to get structured data from API response');
+                // Regular URL processing
+                formData.append('url', url);
+                formData.append('promptType', 'structured');
+                formData.append('provider', 'anthropic');
+                
+                setProgress({step: 'Analyzing content...', percentage: 50, details: 'Processing with Claude'});
+                console.log('Submitting URL:', url);
+
+                const response = await fetch('/api/process-video', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
+
+                const data = await response.json();
+                console.log('API Response:', data);
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process content');
+                }
+
+                // Use the enhanced structured data from the API
+                if (data.structuredData) {
+                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
+                    // Combine structuredData with other top-level fields
+                    setResult({
+                        ...data.structuredData,
+                        deducedRestaurant: data.deducedRestaurant,
+                        restaurantDetails: data.restaurantDetails,
+                        enhanced_places: data.enhanced_places,
+                        geocodedPlaces: data.geocodedPlaces,
+                        processingInfo: data.processingInfo
+                    });
+                } else {
+                    setError('Failed to get structured data from API response');
+                }
             }
-        } catch (err) {
-            console.error('Error details:', err);
-            console.error('Error message:', err instanceof Error ? err.message : 'Unknown error');
-            console.error('Error stack:', err instanceof Error ? err.stack : 'No stack trace');
-            setError(err instanceof Error ? err.message : 'An error occurred');
+
+        } catch (error) {
+            console.error('Error:', error);
+            setError(error instanceof Error ? error.message : 'An error occurred');
         } finally {
             setLoading(false);
         }
@@ -312,15 +248,9 @@ export default function StructuredVideoTest() {
                     timestamps.push(i * frameInterval);
                 }
                 
-                // Ensure we get at least 4 frames (minimum)
-                if (timestamps.length < 4) {
-                    timestamps.length = 0;
-                    timestamps.push(0, video.duration * 0.25, video.duration * 0.5, video.duration * 0.75);
-                }
-                
                 let frameIndex = 0;
                 
-                console.log(`Extracting ${timestamps.length} frames at 1 per ${frameInterval} seconds`);
+                console.log(`Extracting ${timestamps.length} frames at 1 frame every ${frameInterval} seconds`);
                 
                 const extractFrame = () => {
                     if (frameIndex >= timestamps.length) {
@@ -385,41 +315,6 @@ export default function StructuredVideoTest() {
         }
     };
 
-    const handleTestGoogleMaps = async () => {
-        setLoading(true);
-        setError(null);
-        setResult(null);
-        
-        try {
-            console.log('Testing Google Maps API integration...');
-            
-            const response = await fetch('/api/test-google-maps', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    placeName: 'Spartan Tacos',
-                    location: 'San Jose, CA'
-                })
-            });
-            
-            const data = await response.json();
-            console.log('Google Maps API test response:', data);
-            
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to test Google Maps API');
-            }
-            
-            // Show the test results
-            alert(`Google Maps API Test Results:\n\nPlace: ${data.placeName}\nFound: ${data.found ? 'Yes' : 'No'}\nAddress: ${data.address || 'N/A'}\nRating: ${data.rating || 'N/A'}`);
-            
-        } catch (err) {
-            console.error('Google Maps API test error:', err);
-            setError(err instanceof Error ? err.message : 'Failed to test Google Maps API');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
@@ -427,39 +322,40 @@ export default function StructuredVideoTest() {
                     Structured Video Analysis Test
                 </h1>
 
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-yellow-800 text-sm">
+                        <strong>Test Mode:</strong> This page shows detailed debugging information and raw data. 
+                        For a cleaner user experience, visit the <a href="/restaurant-analyzer" className="text-blue-600 hover:text-blue-800 underline">Restaurant Analyzer</a>.
+                    </p>
+                </div>
+
                 <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                     <h2 className="text-xl font-semibold mb-4">Analyze Videos</h2>
                     
-                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                        <p className="text-yellow-800 text-sm">
-                            <strong>Note:</strong> Instagram and YouTube URLs are blocked by their robots.txt files. 
-                            Use public image URLs from sites like Unsplash, Pexels, or direct image links.
-                        </p>
-                    </div>
-                    
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
                         <p className="text-blue-800 text-sm">
-                            <strong>Enhanced Analysis:</strong> The system now takes targeted screenshots - separate screenshots of caption text and video content only (not entire UI). 
-                            For videos: 1 screenshot per 3 seconds (3-8 total) + caption screenshot if available.
-                            Validates place names using Google Maps API and provides confidence scores for each identified location. 
-                            All screenshots are analyzed together for comprehensive results.
+                            <strong>Enhanced Analysis:</strong> The system takes targeted screenshots - separate screenshots of caption text and video content only (not entire UI). 
+                            For videos: 1 frame every 2 seconds + caption screenshot if available.
+                            Uses AI to identify and validate restaurant names using Google Maps API, ensuring accurate place identification from multiple locations.
+                            All screenshots are analyzed together for comprehensive results with restaurant deduction.
                         </p>
                     </div>
-                    
-                    <form onSubmit={handleSubmit} className="space-y-4">
+
+                    {/* Simple Form */}
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Enter Video URL
+                                Enter URL
                             </label>
                             <input
                                 type="url"
                                 value={url}
                                 onChange={handleUrlChange}
-                                placeholder="https://images.unsplash.com/photo-... or direct image URL"
+                                placeholder="https://images.unsplash.com/photo-... or Instagram URL"
                                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             />
                             <p className="mt-1 text-sm text-gray-500">
-                                Use public image URLs (Unsplash, Pexels, direct image links)
+                                Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
                             </p>
                         </div>
 
@@ -470,24 +366,6 @@ export default function StructuredVideoTest() {
                                 className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Processing...' : 'Analyze Content'}
-                            </button>
-                            
-                            <button
-                                type="button"
-                                onClick={handleTestImage}
-                                disabled={loading}
-                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Processing...' : 'Test with Pizza Image'}
-                            </button>
-                            
-                            <button
-                                type="button"
-                                onClick={handleTestGoogleMaps}
-                                disabled={loading}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Processing...' : 'Test Google Maps API'}
                             </button>
                         </div>
                     </form>
@@ -667,14 +545,6 @@ export default function StructuredVideoTest() {
                             </div>
                         )}
                         
-                        {inputMode === 'file' && (
-                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                                <p className="text-blue-700 text-sm">
-                                    <strong>Video Analysis:</strong> This analysis was performed by extracting and analyzing multiple frames from your video file.
-                                </p>
-                            </div>
-                        )}
-                        
                         {result.captionText && (
                             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
                                 <p className="text-green-700 text-sm">
@@ -702,6 +572,94 @@ export default function StructuredVideoTest() {
                                         <p className="text-gray-600">No places identified</p>
                                     )}
                                 </div>
+
+                                {/* Deduced Restaurant Section */}
+                                {result.deducedRestaurant && (
+                                    <div>
+                                        <h3 className="font-medium text-gray-900">🎯 Deduced Restaurant</h3>
+                                        <div className="p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-md">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg">🏪</span>
+                                                <span className="font-semibold text-green-800 text-lg">
+                                                    {result.deducedRestaurant}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-600 mt-1">
+                                                AI-analyzed from all available data including place names, context clues, and location information
+                                            </p>
+                                            
+                                            {/* Restaurant Details */}
+                                            {result.restaurantDetails && (
+                                                <div className="mt-3 p-3 bg-white rounded border">
+                                                    {result.restaurantDetails.isChain ? (
+                                                        <div className="text-sm">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-blue-600">🔗</span>
+                                                                <span className="font-medium text-blue-800">Chain Restaurant</span>
+                                                            </div>
+                                                            <p className="text-gray-600">
+                                                                <strong>Chain:</strong> {result.restaurantDetails.chainName}
+                                                            </p>
+                                                            <p className="text-gray-500 text-xs mt-1">
+                                                                Address and hours not available for chain locations
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-green-600">📍</span>
+                                                                <span className="font-medium text-green-800">Single Location</span>
+                                                            </div>
+                                                            
+                                                            {result.restaurantDetails.address && (
+                                                                <p className="text-gray-600 mb-1">
+                                                                    <strong>Address:</strong> {result.restaurantDetails.address}
+                                                                </p>
+                                                            )}
+                                                            
+                                                            {result.restaurantDetails.website && (
+                                                                <p className="text-gray-600 mb-1">
+                                                                    <strong>Website:</strong> 
+                                                                    <a 
+                                                                        href={result.restaurantDetails.website} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-blue-600 hover:text-blue-800 ml-1"
+                                                                    >
+                                                                        Visit Website
+                                                                    </a>
+                                                                </p>
+                                                            )}
+                                                            
+                                                            {result.restaurantDetails.phone && (
+                                                                <p className="text-gray-600 mb-1">
+                                                                    <strong>Phone:</strong> {result.restaurantDetails.phone}
+                                                                </p>
+                                                            )}
+                                                            
+                                                            {result.restaurantDetails.rating && (
+                                                                <p className="text-gray-600 mb-1">
+                                                                    <strong>Rating:</strong> ⭐ {result.restaurantDetails.rating}/5
+                                                                </p>
+                                                            )}
+                                                            
+                                                            {result.restaurantDetails.hours && result.restaurantDetails.hours.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <p className="font-medium text-gray-700 mb-1">Hours:</p>
+                                                                    <div className="text-xs text-gray-600 space-y-1">
+                                                                        {result.restaurantDetails.hours.map((hour: string, index: number) => (
+                                                                            <div key={index}>{hour}</div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div>
                                     <h3 className="font-medium text-gray-900">Context Clues</h3>
@@ -779,6 +737,41 @@ export default function StructuredVideoTest() {
                             <h3 className="font-medium text-gray-900 mb-2">Raw JSON Data</h3>
                             <pre className="text-sm text-gray-700 overflow-x-auto">
                                 {JSON.stringify(result, null, 2)}
+                            </pre>
+                        </div>
+
+                        {/* Clean Restaurant Data */}
+                        <div className="mt-6 p-4 bg-blue-50 rounded-md">
+                            <h3 className="font-medium text-blue-900 mb-2">Clean Restaurant Data</h3>
+                            <pre className="text-sm text-blue-700 overflow-x-auto">
+                                {JSON.stringify({
+                                    restaurant: result.restaurantDetails ? {
+                                        name: result.restaurantDetails.name,
+                                        isChain: result.restaurantDetails.isChain,
+                                        chainName: result.restaurantDetails.isChain ? result.restaurantDetails.chainName : null,
+                                        // Location details only for single locations
+                                        address: result.restaurantDetails.isChain ? null : result.restaurantDetails.address,
+                                        website: result.restaurantDetails.isChain ? null : result.restaurantDetails.website,
+                                        hours: result.restaurantDetails.isChain ? null : result.restaurantDetails.hours,
+                                        phone: result.restaurantDetails.isChain ? null : result.restaurantDetails.phone,
+                                        rating: result.restaurantDetails.isChain ? null : result.restaurantDetails.rating,
+                                        placeId: result.restaurantDetails.isChain ? null : result.restaurantDetails.placeId
+                                    } : null,
+                                    analysis: {
+                                        place_names: result.place_names,
+                                        multiple_locations: result.multiple_locations,
+                                        activity_type: result.activity_type,
+                                        foods_shown: result.foods_shown,
+                                        tags: result.tags,
+                                        context_clues: result.context_clues
+                                    },
+                                    processing: {
+                                        frameCount: (result as any).processingInfo?.frameCount || 0,
+                                        originalPlaceCount: (result as any).processingInfo?.originalPlaceCount || 0,
+                                        validatedPlaceCount: (result as any).processingInfo?.validatedPlaceCount || 0,
+                                        geocodedPlaceCount: (result as any).processingInfo?.geocodedPlaceCount || 0
+                                    }
+                                }, null, 2)}
                             </pre>
                         </div>
 

@@ -325,9 +325,9 @@ export async function POST(request: NextRequest) {
             
             // Calculate number of frames: 1 per 2 seconds as requested
             const frameInterval = 2; // seconds
-            const videoScreenshotCount = Math.max(3, Math.min(8, Math.ceil(videoDuration / frameInterval)));
+            const videoScreenshotCount = Math.ceil(videoDuration / frameInterval);
             
-            console.log(`Taking ${videoScreenshotCount} video frames at 1 per ${frameInterval} seconds...`);
+            console.log(`Taking ${videoScreenshotCount} video frames at 1 frame every ${frameInterval} seconds...`);
             
             // FAST METHOD: Use video element's natural frame extraction
             try {
@@ -458,7 +458,7 @@ export async function POST(request: NextRequest) {
         console.log('Screenshots taken successfully:', screenshots.length);
         console.log('Screenshot breakdown:', {
             captionScreenshots: extractedData.caption.length > 0 ? 1 : 0,
-            videoScreenshots: isVideoPost ? (videoDuration > 0 ? Math.max(3, Math.min(8, Math.ceil(videoDuration / 3))) : 1) : 0,
+            videoScreenshots: isVideoPost ? (videoDuration > 0 ? Math.max(3, Math.min(8, Math.ceil(videoDuration / 2))) : 1) : 0,
             contentScreenshots: !isVideoPost ? 1 : 0
         });
 

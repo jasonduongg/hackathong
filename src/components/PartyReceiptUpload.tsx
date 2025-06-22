@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { Upload, FileText, DollarSign, Calendar, Store, Loader2, X, Receipt } from 'lucide-react';
 import { PartyReceipt, ReceiptData, ReceiptItem, ReceiptSubItem } from '@/types/receipt';
 import { useParty } from '@/contexts/PartyContext';
+import { useUpload } from '@/contexts/UploadContext';
 
 interface ReceiptAnalysis {
     success: boolean;
@@ -18,11 +19,14 @@ interface PartyReceiptUploadProps {
 
 const PartyReceiptUpload: React.FC<PartyReceiptUploadProps> = ({ partyId }) => {
     const { addReceipt } = useParty();
-    const [isDragOver, setIsDragOver] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [analysis, setAnalysis] = useState<ReceiptAnalysis | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const {
+        state: { isDragOver, isUploading, analysis, error, selectedFile },
+        setIsDragOver,
+        setIsUploading,
+        setAnalysis,
+        setError,
+        setSelectedFile
+    } = useUpload();
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();

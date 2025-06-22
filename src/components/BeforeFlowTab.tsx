@@ -301,15 +301,16 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
                     placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
-                    image: beforeFlowResult.restaurantDetails.image || null
+                    // Exclude image URL to avoid size issues
+                    // image: beforeFlowResult.restaurantDetails.image || null
                 } : null,
                 analysis: {
-                    place_names: beforeFlowResult.place_names,
-                    multiple_locations: beforeFlowResult.multiple_locations,
-                    activity_type: beforeFlowResult.activity_type,
-                    foods_shown: beforeFlowResult.foods_shown,
-                    tags: beforeFlowResult.tags,
-                    context_clues: beforeFlowResult.context_clues
+                    place_names: (beforeFlowResult.place_names || []).slice(0, 5), // Limit array length
+                    multiple_locations: beforeFlowResult.multiple_locations || false,
+                    activity_type: beforeFlowResult.activity_type || 'other',
+                    foods_shown: (beforeFlowResult.foods_shown || []).slice(0, 10), // Limit array length
+                    tags: (beforeFlowResult.tags || []).slice(0, 15), // Limit array length
+                    context_clues: (beforeFlowResult.context_clues || []).slice(0, 8) // Limit array length
                 },
                 processing: {
                     frameCount: beforeFlowResult.processingInfo?.frameCount || 0,
@@ -319,19 +320,20 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 }
             };
 
-            // Prepare Instagram data if available
+            // Prepare Instagram data
             const instagramEventData = instagramData ? {
                 // Exclude screenshots to avoid Firestore size limit
-                // screenshots: instagramData.screenshots,
-                captionText: instagramData.captionText,
-                accountMentions: instagramData.accountMentions,
-                locationTags: instagramData.locationTags,
-                hashtags: instagramData.hashtags,
-                allText: instagramData.allText,
-                screenshotCount: instagramData.screenshotCount,
-                videoDuration: instagramData.videoDuration,
+                // screenshots: instagramData.screenshots || [],
+                captionText: (instagramData.captionText || '').substring(0, 500), // Limit caption length
+                accountMentions: (instagramData.accountMentions || []).slice(0, 10), // Limit array length
+                locationTags: (instagramData.locationTags || []).slice(0, 5), // Limit array length
+                hashtags: (instagramData.hashtags || []).slice(0, 20), // Limit array length
+                // Truncate allText to avoid size issues
+                allText: (instagramData.allText || '').substring(0, 200), // Limit allText length
+                screenshotCount: instagramData.screenshotCount || 0,
+                videoDuration: instagramData.videoDuration || 0,
                 originalUrl: beforeFlowUrl
-            } : undefined;
+            } : null;
 
             // Save to database
             const response = await fetch('/api/events', {
@@ -373,6 +375,18 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         }
     };
 
+    const handleReset = () => {
+        setBeforeFlowUrl('');
+        setBeforeFlowResult(null);
+        setBeforeFlowError(null);
+        setInstagramData(null);
+        setSearchQuery('');
+        setSearchResults([]);
+        setSelectedRestaurant(null);
+        setSearchError(null);
+        clearError();
+    };
+
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -395,172 +409,223 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 </div>
             </div>
 
-            {/* Restaurant Search Section */}
-            <div className="mb-8">
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
-                    <div className="flex items-center mb-4">
-                        <div className="flex-shrink-0">
-                            <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
-                        <div className="ml-3">
-                            <h3 className="text-lg font-medium text-orange-900">Search Restaurant</h3>
-                            <p className="text-sm text-orange-700">Find a specific restaurant near your party</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex space-x-2">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                                placeholder="Enter restaurant name (e.g., 'McDonald's', 'Pizza Hut')"
-                                className="flex-1 px-3 py-2 text-sm border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                disabled={isSearching}
-                            />
-                            <button
-                                onClick={handleSearch}
-                                disabled={isSearching || !searchQuery.trim()}
-                                className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isSearching ? 'Searching...' : 'Search'}
-                            </button>
-                        </div>
-
-                        {searchError && (
-                            <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-3">
-                                {searchError}
+            {/* Show search options only when there are no results */}
+            {!beforeFlowResult && (
+                <>
+                    {/* AI Analysis Section - Enhanced and Promoted */}
+                    <div className="mb-8">
+                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+                            <div className="flex items-center mb-4">
+                                <div className="flex-shrink-0">
+                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                        <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-lg font-medium text-purple-900">AI-Powered Content Analysis</h3>
+                                    <p className="text-sm text-purple-700">Upload images or Instagram posts for intelligent restaurant detection</p>
+                                </div>
                             </div>
-                        )}
 
-                        {searchResults.length > 0 && (
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-orange-800">Search Results ({searchResults.length} found)</h4>
-                                {searchResults.map((restaurant, index) => {
-                                    const isSelected = selectedRestaurant &&
-                                        selectedRestaurant.name === restaurant.name &&
-                                        selectedRestaurant.address === restaurant.address;
+                            <form onSubmit={handleBeforeFlowSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-purple-800 mb-2">
+                                        Enter URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={beforeFlowUrl}
+                                        onChange={handleBeforeFlowUrlChange}
+                                        placeholder="https://images.unsplash.com/photo-... or Instagram URL"
+                                        className="block w-full px-3 py-2 border border-purple-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                                    />
+                                    <p className="mt-1 text-sm text-purple-600">
+                                        Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
+                                    </p>
+                                </div>
 
-                                    return (
-                                        <div
-                                            key={index}
-                                            className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
-                                                ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
-                                                : 'bg-white border-orange-200 hover:bg-orange-50'
-                                                }`}
-                                            onClick={() => handleSelectSearchResult(restaurant)}
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center space-x-2">
-                                                        <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
-                                                        {isSelected && (
-                                                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                                                                Selected
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-sm text-gray-600">{restaurant.address}</p>
-                                                    <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                                        {restaurant.rating && (
-                                                            <span>⭐ {restaurant.rating}/5</span>
-                                                        )}
-                                                        {restaurant.distanceFromParty && (
-                                                            <span>📍 {restaurant.distanceFromParty.toFixed(1)} km away</span>
-                                                        )}
-                                                        {restaurant.isChain && (
-                                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                                                Chain
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <button className={`${isSelected ? 'text-green-600' : 'text-orange-600 hover:text-orange-800'
-                                                    }`}>
-                                                    {isSelected ? (
-                                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                        </svg>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                <div className="flex space-x-4">
+                                    <button
+                                        type="submit"
+                                        disabled={beforeFlowLoading || !beforeFlowUrl.trim()}
+                                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-2 px-4 rounded-md hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm"
+                                    >
+                                        {beforeFlowLoading ? 'Processing...' : 'Analyze with AI'}
+                                    </button>
+                                </div>
+                            </form>
 
-                        {/* Selected Restaurant Display */}
-                        {selectedRestaurant && (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center mb-2">
-                                            <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
-                                        </div>
-                                        <div className="text-sm text-green-800">
-                                            <p className="font-semibold text-base">{selectedRestaurant.name}</p>
-                                            <p className="text-green-700">{selectedRestaurant.address}</p>
-                                            {selectedRestaurant.rating && (
-                                                <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
-                                            )}
-                                            {selectedRestaurant.distanceFromParty && (
-                                                <p className="text-green-600">
-                                                    Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
-                                                </p>
-                                            )}
-                                            {selectedRestaurant.isChain && (
-                                                <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
-                                                    Chain Restaurant
-                                                </span>
-                                            )}
-                                        </div>
+                            {/* AI Features Highlight */}
+                            <div className="mt-4 p-3 bg-white/50 rounded-lg border border-purple-100">
+                                <div className="flex items-center space-x-2 mb-2">
+                                    <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span className="text-xs font-medium text-purple-800">AI Features</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-purple-700">
+                                    <div className="flex items-center space-x-1">
+                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                        <span>Smart screenshot analysis</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                        <span>Google Maps integration</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                        <span>Restaurant validation</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                        <span>Comprehensive results</span>
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Simple Form */}
-            <form onSubmit={handleBeforeFlowSubmit} className="space-y-6 mb-8">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Enter URL
-                    </label>
-                    <input
-                        type="url"
-                        value={beforeFlowUrl}
-                        onChange={handleBeforeFlowUrlChange}
-                        placeholder="https://images.unsplash.com/photo-... or Instagram URL"
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                        Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
-                    </p>
-                </div>
+                    {/* Restaurant Search Section - Moved to second position */}
+                    <div className="mb-8">
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+                            <div className="flex items-center mb-4">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-lg font-medium text-orange-900">Search Restaurant</h3>
+                                    <p className="text-sm text-orange-700">Find a specific restaurant near your party</p>
+                                </div>
+                            </div>
 
-                <div className="flex space-x-4">
-                    <button
-                        type="submit"
-                        disabled={beforeFlowLoading || !beforeFlowUrl.trim()}
-                        className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {beforeFlowLoading ? 'Processing...' : 'Analyze Content'}
-                    </button>
-                </div>
-            </form>
+                            <div className="space-y-4">
+                                <div className="flex space-x-2">
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                        placeholder="Enter restaurant name (e.g., 'McDonald's', 'Pizza Hut')"
+                                        className="flex-1 px-3 py-2 text-sm border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        disabled={isSearching}
+                                    />
+                                    <button
+                                        onClick={handleSearch}
+                                        disabled={isSearching || !searchQuery.trim()}
+                                        className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSearching ? 'Searching...' : 'Search'}
+                                    </button>
+                                </div>
+
+                                {searchError && (
+                                    <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-3">
+                                        {searchError}
+                                    </div>
+                                )}
+
+                                {searchResults.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h4 className="text-sm font-medium text-orange-800">Search Results ({searchResults.length} found)</h4>
+                                        {searchResults.map((restaurant, index) => {
+                                            const isSelected = selectedRestaurant &&
+                                                selectedRestaurant.name === restaurant.name &&
+                                                selectedRestaurant.address === restaurant.address;
+
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
+                                                        ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
+                                                        : 'bg-white border-orange-200 hover:bg-orange-50'
+                                                        }`}
+                                                    onClick={() => handleSelectSearchResult(restaurant)}
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
+                                                                {isSelected && (
+                                                                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                                        Selected
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm text-gray-600">{restaurant.address}</p>
+                                                            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                                                {restaurant.rating && (
+                                                                    <span>⭐ {restaurant.rating}/5</span>
+                                                                )}
+                                                                {restaurant.distanceFromParty && (
+                                                                    <span>📍 {restaurant.distanceFromParty.toFixed(1)} km away</span>
+                                                                )}
+                                                                {restaurant.isChain && (
+                                                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                                        Chain
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button className={`${isSelected ? 'text-green-600' : 'text-orange-600 hover:text-orange-800'
+                                                            }`}>
+                                                            {isSelected ? (
+                                                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                </svg>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Selected Restaurant Display */}
+                                {selectedRestaurant && (
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center mb-2">
+                                                    <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
+                                                </div>
+                                                <div className="text-sm text-green-800">
+                                                    <p className="font-semibold text-base">{selectedRestaurant.name}</p>
+                                                    <p className="text-green-700">{selectedRestaurant.address}</p>
+                                                    {selectedRestaurant.rating && (
+                                                        <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
+                                                    )}
+                                                    {selectedRestaurant.distanceFromParty && (
+                                                        <p className="text-green-600">
+                                                            Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
+                                                        </p>
+                                                    )}
+                                                    {selectedRestaurant.isChain && (
+                                                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
+                                                            Chain Restaurant
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {beforeFlowError && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -728,60 +793,60 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                         <p className="text-sm text-green-600 italic">No specific places identified</p>
                                     )}
                                 </div>
-
-                                <h5 className="text-sm font-medium text-green-800 mb-2 mt-4">🍽️ Foods Shown</h5>
-                                <div className="flex flex-wrap gap-1">
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-medium text-green-800 mb-2">🍽️ Foods Shown</h5>
+                                <div className="space-y-1">
                                     {beforeFlowResult.foods_shown && beforeFlowResult.foods_shown.length > 0 ? (
                                         beforeFlowResult.foods_shown.map((food: string, index: number) => (
-                                            <span key={index} className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full">
+                                            <div key={index} className="text-sm text-green-700 bg-green-100 px-2 py-1 rounded">
                                                 {food}
-                                            </span>
+                                            </div>
                                         ))
                                     ) : (
                                         <p className="text-sm text-green-600 italic">No specific foods identified</p>
                                     )}
                                 </div>
                             </div>
+                        </div>
 
-                            <div>
-                                <h5 className="text-sm font-medium text-green-800 mb-2">🏷️ Tags & Context</h5>
-                                <div className="space-y-2">
-                                    <div>
-                                        <span className="text-xs font-medium text-green-700">Activity Type:</span>
-                                        <div className="text-sm text-green-600 capitalize">
-                                            {beforeFlowResult.activity_type || 'Not specified'}
-                                        </div>
+                        <div className="mt-4">
+                            <h5 className="text-sm font-medium text-green-800 mb-2">🏷️ Tags & Context</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <span className="text-xs text-green-600">Activity Type:</span>
+                                    <div className="text-sm text-green-700 bg-green-100 px-2 py-1 rounded mt-1">
+                                        {beforeFlowResult.activity_type || 'other'}
                                     </div>
-
-                                    <div>
-                                        <span className="text-xs font-medium text-green-700">Tags:</span>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                            {beforeFlowResult.tags && beforeFlowResult.tags.length > 0 ? (
-                                                beforeFlowResult.tags.slice(0, 6).map((tag: string, index: number) => (
-                                                    <span key={index} className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">
-                                                        {tag}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                <p className="text-sm text-green-600 italic">No tags identified</p>
-                                            )}
-                                        </div>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-green-600">Tags:</span>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {beforeFlowResult.tags && beforeFlowResult.tags.length > 0 ? (
+                                            beforeFlowResult.tags.map((tag: string, index: number) => (
+                                                <span key={index} className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                                                    {tag}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-xs text-green-600 italic">No tags identified</span>
+                                        )}
                                     </div>
-
-                                    {beforeFlowResult.context_clues && beforeFlowResult.context_clues.length > 0 && (
-                                        <div>
-                                            <span className="text-xs font-medium text-green-700">Context Clues:</span>
-                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                {beforeFlowResult.context_clues.slice(0, 4).map((clue: string, index: number) => (
-                                                    <span key={index} className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                                                        {clue}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
+
+                            {beforeFlowResult.context_clues && beforeFlowResult.context_clues.length > 0 && (
+                                <div className="mt-3">
+                                    <span className="text-xs text-green-600">Context Clues:</span>
+                                    <div className="space-y-1 mt-1">
+                                        {beforeFlowResult.context_clues.map((clue: string, index: number) => (
+                                            <div key={index} className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                                                {clue}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {beforeFlowResult.processingInfo && (
@@ -825,15 +890,16 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
                                     placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
-                                    image: beforeFlowResult.restaurantDetails.image || null
+                                    // Exclude image URL to avoid size issues
+                                    // image: beforeFlowResult.restaurantDetails.image || null
                                 } : null,
                                 analysis: {
-                                    place_names: beforeFlowResult.place_names,
-                                    multiple_locations: beforeFlowResult.multiple_locations,
-                                    activity_type: beforeFlowResult.activity_type,
-                                    foods_shown: beforeFlowResult.foods_shown,
-                                    tags: beforeFlowResult.tags,
-                                    context_clues: beforeFlowResult.context_clues
+                                    place_names: (beforeFlowResult.place_names || []).slice(0, 5), // Limit array length
+                                    multiple_locations: beforeFlowResult.multiple_locations || false,
+                                    activity_type: beforeFlowResult.activity_type || 'other',
+                                    foods_shown: (beforeFlowResult.foods_shown || []).slice(0, 10), // Limit array length
+                                    tags: (beforeFlowResult.tags || []).slice(0, 15), // Limit array length
+                                    context_clues: (beforeFlowResult.context_clues || []).slice(0, 8) // Limit array length
                                 },
                                 processing: {
                                     frameCount: beforeFlowResult.processingInfo?.frameCount || 0,
@@ -845,44 +911,52 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                         </pre>
                     </div>
 
-                    {/* Save to Database Button */}
-                    <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                        <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-medium text-gray-900">Save to Database</h4>
-                            <span className="text-sm text-gray-500">Party ID: {partyId}</span>
-                        </div>
-
+                    {/* Action Buttons */}
+                    <div className="mt-6 flex space-x-4">
                         <button
                             onClick={handleSaveToDatabase}
-                            disabled={savingEvent || !beforeFlowResult}
-                            className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                            disabled={savingEvent}
+                            className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                         >
                             {savingEvent ? (
-                                <span className="flex items-center justify-center">
+                                <>
                                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    Saving to Database...
-                                </span>
+                                    <span>Saving...</span>
+                                </>
                             ) : (
-                                '💾 Save Restaurant Event to Database'
+                                <>
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                    </svg>
+                                    <span>Save to Database</span>
+                                </>
                             )}
                         </button>
-
-                        {/* Status Messages */}
-                        {saveStatus === 'success' && (
-                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                                <p className="text-green-700 text-sm">✅ Event saved successfully!</p>
-                            </div>
-                        )}
-
-                        {saveStatus === 'error' && (
-                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                                <p className="text-red-700 text-sm">❌ Failed to save event. Please try again.</p>
-                            </div>
-                        )}
+                        <button
+                            onClick={handleReset}
+                            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center space-x-2"
+                        >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span>Reset</span>
+                        </button>
                     </div>
+
+                    {/* Save Status Messages */}
+                    {saveStatus === 'success' && (
+                        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                            <p className="text-green-700 text-sm">✅ Restaurant event saved successfully!</p>
+                        </div>
+                    )}
+                    {saveStatus === 'error' && (
+                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                            <p className="text-red-700 text-sm">❌ Failed to save restaurant event. Please try again.</p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

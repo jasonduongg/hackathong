@@ -96,6 +96,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
     const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
+    const [selectedUserForModal, setSelectedUserForModal] = useState<UserProfile | null>(null);
 
     const fetchMemberMetadata = async () => {
         if (!partyId) return;
@@ -441,7 +442,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                             <div className="text-right">
                                 <p className="text-sm text-gray-500">Created by</p>
                                 <p className="font-medium text-gray-900">
-                                    {memberProfiles.find(p => p.uid === party.createdBy)?.displayName || 'Unknown'}
+                                    {memberProfiles.find((p: UserProfile) => p.uid === party.createdBy)?.displayName || 'Unknown'}
                                 </p>
                             </div>
                         </div>
@@ -452,22 +453,16 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                 Members ({memberProfiles.length}/4)
                             </h3>
                             <div className="space-y-3">
-                                {memberProfiles.map((profile) => {
+                                {memberProfiles.map((profile: UserProfile) => {
                                     const display = getUserDisplay(profile);
                                     return (
-                                        <div key={profile.uid} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center">
-                                                {display.type === 'image' ? (
-                                                    <img
-                                                        src={display.value}
-                                                        alt={profile.displayName || 'Member'}
-                                                        className="w-full h-full rounded-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className={`w-full h-full rounded-full flex items-center justify-center text-white text-sm font-medium ${getInitialColor(profile.uid)}`}>
-                                                        {display.value}
-                                                    </div>
-                                                )}
+                                        <div
+                                            key={profile.uid}
+                                            className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
+                                            onClick={() => setSelectedUserForModal(profile)}
+                                        >
+                                            <div className={`w-10 h-10 rounded-full ${getInitialColor(profile.uid)} flex items-center justify-center text-white font-bold`}>
+                                                {getInitial(profile)}
                                             </div>
                                             <div className="flex-1">
                                                 <p className="text-sm font-medium text-gray-900">
@@ -810,6 +805,13 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 </div>
             )}
 
+            {selectedUserForModal && (
+                <UserMetadataModal 
+                    userProfile={selectedUserForModal} 
+                    onClose={() => setSelectedUserForModal(null)} 
+                />
+            )}
+
             {/* Restaurant Data Modal */}
             {showRestaurantData && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1108,6 +1110,45 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                 <SinglePartyContent partyId={partyId} />
             </VideoAnalysisProvider>
         </PartyProvider>
+    );
+};
+
+// Simple Modal for User Metadata
+const UserMetadataModal: React.FC<{ userProfile: UserProfile; onClose: () => void }> = ({ userProfile, onClose }) => {
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">
+                <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-gray-800">{userProfile.displayName || 'User Details'}</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p><span className="font-semibold text-gray-700">Email:</span> <span className="text-gray-600">{userProfile.email}</span></p>
+                    <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Dietary Restrictions:</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {userProfile.dietaryRestrictions?.length ? userProfile.dietaryRestrictions.map(r => <span key={r} className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full">{r}</span>) : <span className="text-gray-500 text-sm">None</span>}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Food Preferences:</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {userProfile.foodPreferences?.length ? userProfile.foodPreferences.map(p => <span key={p} className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">{p}</span>) : <span className="text-gray-500 text-sm">None</span>}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Activity Preferences:</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {userProfile.activityPreferences?.length ? userProfile.activityPreferences.map(a => <span key={a} className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">{a}</span>) : <span className="text-gray-500 text-sm">None</span>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 };
 

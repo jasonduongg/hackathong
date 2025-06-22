@@ -7,6 +7,7 @@ import { OnboardingForm } from '@/components/onboarding/OnboardingForm';
 import { Navbar } from '@/components/Navbar';
 import { PartyView } from '@/components/PartyView';
 import { Invitations } from '@/components/Invitations';
+
 import { VideoUpload } from '@/components/VideoUpload';
 import { updateUserProfile } from '@/lib/users';
 
@@ -16,9 +17,11 @@ export default function HomePage() {
     const [showProfile, setShowProfile] = useState(false);
     const [showParties, setShowParties] = useState(false);
     const [showInvitations, setShowInvitations] = useState(false);
+
     const [showVideoUpload, setShowVideoUpload] = useState(false);
     const [paypalEmail, setPayPalEmail] = useState(userProfile?.paypalEmail || '');
     const [paypalSaveStatus, setPaypalSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
 
     if (loading) {
         return (
@@ -194,6 +197,7 @@ export default function HomePage() {
             />
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 <div className="px-4 py-6 sm:px-0">
+
                     <div className="text-center mb-12">
                         <h1 className="text-6xl font-bold text-gray-900 mb-4">
                             Hi, {userProfile?.displayName || 'there'}! 👋
@@ -201,6 +205,7 @@ export default function HomePage() {
                         <p className="text-xl text-gray-600 mb-8">
                             Welcome to Hack. What would you like to do today?
                         </p>
+
                         {/* PayPal Email Input */}
                         <div className="max-w-md mx-auto mb-8">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Your PayPal Email</label>

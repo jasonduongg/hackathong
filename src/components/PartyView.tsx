@@ -51,6 +51,7 @@ export const PartyView: React.FC = () => {
         }
     };
 
+
     const fetchMemberProfiles = async (partiesData: Party[]) => {
         try {
             const profilesMap: { [partyId: string]: UserProfile[] } = {};
@@ -70,6 +71,7 @@ export const PartyView: React.FC = () => {
         }
     };
 
+
     const fetchUserInvitations = async () => {
         if (!user) return;
 
@@ -82,6 +84,7 @@ export const PartyView: React.FC = () => {
             setLoading(false);
         }
     };
+
 
     // Helper function to get display name or initial for a user
     const getUserDisplay = (profile: UserProfile) => {
@@ -219,6 +222,7 @@ export const PartyView: React.FC = () => {
             </div>
         );
     }
+
 
     return (
         <div className="flex">

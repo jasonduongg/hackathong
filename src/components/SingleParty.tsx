@@ -735,6 +735,64 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                 </div>
                             </div>
 
+                            {/* Invite Form */}
+                            {showInviteForm && (
+                                <div className="mb-6 border-t border-gray-200 pt-6">
+                                    <h3 className="text-lg font-medium text-gray-900 mb-3">Invite New Members</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Search by Email
+                                            </label>
+                                            <div className="flex space-x-2">
+                                                <input
+                                                    type="email"
+                                                    value={searchEmail}
+                                                    onChange={(e) => setSearchEmail(e.target.value)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && handleSearchUsers()}
+                                                    placeholder="Enter email address..."
+                                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                                <button
+                                                    onClick={handleSearchUsers}
+                                                    className="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700"
+                                                >
+                                                    Search
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Search Results */}
+                                        {searchResults.length > 0 && (
+                                            <div>
+                                                <h4 className="text-sm font-medium text-gray-700 mb-2">Search Results</h4>
+                                                <div className="space-y-2">
+                                                    {searchResults.map((userData) => (
+                                                        <div
+                                                            key={userData.uid}
+                                                            className="flex justify-between items-center p-3 bg-indigo-50 rounded-lg"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-medium text-gray-900">
+                                                                    {userData.displayName || 'Unknown User'}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">{userData.email}</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleInviteUser(userData)}
+                                                                className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
+                                                            >
+                                                                Invite
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Upcoming Events Section */}
                             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                                 <h3 className="text-lg font-medium text-green-900 mb-3">Upcoming Events</h3>
@@ -1060,64 +1118,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Invite Form */}
-                        {showInviteForm && (
-                            <div className="border-t border-gray-200 pt-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-3">Invite New Members</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Search by Email
-                                        </label>
-                                        <div className="flex space-x-2">
-                                            <input
-                                                type="email"
-                                                value={searchEmail}
-                                                onChange={(e) => setSearchEmail(e.target.value)}
-                                                onKeyPress={(e) => e.key === 'Enter' && handleSearchUsers()}
-                                                placeholder="Enter email address..."
-                                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                            />
-                                            <button
-                                                onClick={handleSearchUsers}
-                                                className="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700"
-                                            >
-                                                Search
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Search Results */}
-                                    {searchResults.length > 0 && (
-                                        <div>
-                                            <h4 className="text-sm font-medium text-gray-700 mb-2">Search Results</h4>
-                                            <div className="space-y-2">
-                                                {searchResults.map((userData) => (
-                                                    <div
-                                                        key={userData.uid}
-                                                        className="flex justify-between items-center p-3 bg-indigo-50 rounded-lg"
-                                                    >
-                                                        <div>
-                                                            <p className="text-sm font-medium text-gray-900">
-                                                                {userData.displayName || 'Unknown User'}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500">{userData.email}</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleInviteUser(userData)}
-                                                            className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
-                                                        >
-                                                            Invite
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}

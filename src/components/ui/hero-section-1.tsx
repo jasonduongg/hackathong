@@ -121,11 +121,11 @@ export function HeroSection() {
                                     className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
                                     <div
                                         key={1}
-                                        className="bg-soft-orange-100 rounded-[14px] border border-soft-orange-200 p-0.5">
+                                        className="bg-soft-orange-100 rounded-full border border-soft-orange-200 p-0.5">
                                         <Button
                                             asChild
                                             size="lg"
-                                            className="rounded-xl px-5 text-base bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700">
+                                            className="rounded-full px-5 text-base bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700">
                                             <Link href="/auth?tab=signup">
                                                 <span className="text-nowrap">Get Started Free</span>
                                             </Link>
@@ -136,7 +136,7 @@ export function HeroSection() {
                                         asChild
                                         size="lg"
                                         variant="ghost"
-                                        className="h-10.5 rounded-xl px-5 text-soft-orange-600 hover:bg-soft-orange-50">
+                                        className="h-10.5 rounded-full px-5 text-soft-orange-600 hover:bg-soft-orange-50">
                                         <Link href="/plans">
                                             <span className="text-nowrap">View Plans</span>
                                         </Link>
@@ -190,10 +190,10 @@ export function HeroSection() {
 }
 
 const menuItems = [
-    { name: 'Features', href: '#features' },
-    { name: 'How It Works', href: '#how-it-works' },
-    { name: 'Pricing', href: '#pricing' },
-    { name: 'About', href: '#about' },
+    { name: 'Features', href: '#how-it-works' },
+    { name: 'Demo', href: '#examples' },
+    { name: 'Testimonials', href: '#testimonials' },
+    { name: 'Pricing', href: '/plans' },
 ]
 
 const HeroHeader = () => {
@@ -207,12 +207,29 @@ const HeroHeader = () => {
         window.addEventListener('scroll', handleScroll)
         return () => window.removeEventListener('scroll', handleScroll)
     }, [])
+
+    const handleMenuClick = (href: string) => {
+        setMenuState(false)
+
+        if (href.startsWith('#')) {
+            // Smooth scroll to section
+            const element = document.querySelector(href)
+            if (element) {
+                element.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                })
+            }
+        }
+        // If it's a route (like /plans), the Link component will handle navigation
+    }
+
     return (
         <header>
             <nav
                 data-state={menuState && 'active'}
                 className="fixed z-20 w-full px-2 group">
-                <div className={cn('mx-auto mt-2 max-w-7xl px-6 transition-all duration-300 lg:px-12', isScrolled && 'bg-background/50 max-w-6xl rounded-full border backdrop-blur-lg lg:px-5')}>
+                <div className={cn('mx-auto mt-6 max-w-7xl px-6 transition-all duration-300 lg:px-12', isScrolled && 'bg-background/50 max-w-6xl rounded-full border backdrop-blur-lg lg:px-5')}>
                     <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
                         <div className="flex w-full justify-between lg:w-auto">
                             <Link
@@ -235,11 +252,21 @@ const HeroHeader = () => {
                             <ul className="flex gap-8 text-sm">
                                 {menuItems.map((item, index) => (
                                     <li key={index}>
-                                        <Link
-                                            href={item.href}
-                                            className="text-muted-foreground hover:text-accent-foreground block duration-150">
-                                            <span>{item.name}</span>
-                                        </Link>
+                                        {item.href.startsWith('#') ? (
+                                            <button
+                                                onClick={() => handleMenuClick(item.href)}
+                                                className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                                            >
+                                                <span>{item.name}</span>
+                                            </button>
+                                        ) : (
+                                            <Link
+                                                href={item.href}
+                                                className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                                            >
+                                                <span>{item.name}</span>
+                                            </Link>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
@@ -250,11 +277,21 @@ const HeroHeader = () => {
                                 <ul className="space-y-6 text-base">
                                     {menuItems.map((item, index) => (
                                         <li key={index}>
-                                            <Link
-                                                href={item.href}
-                                                className="text-muted-foreground hover:text-accent-foreground block duration-150">
-                                                <span>{item.name}</span>
-                                            </Link>
+                                            {item.href.startsWith('#') ? (
+                                                <button
+                                                    onClick={() => handleMenuClick(item.href)}
+                                                    className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                                                >
+                                                    <span>{item.name}</span>
+                                                </button>
+                                            ) : (
+                                                <Link
+                                                    href={item.href}
+                                                    className="text-muted-foreground hover:text-accent-foreground block duration-150"
+                                                >
+                                                    <span>{item.name}</span>
+                                                </Link>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>
@@ -264,7 +301,7 @@ const HeroHeader = () => {
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className={cn(isScrolled && 'lg:hidden')}>
+                                    className={cn(isScrolled && 'lg:hidden', 'rounded-full')}>
                                     <Link href="/auth?tab=login">
                                         <span>Login</span>
                                     </Link>
@@ -272,7 +309,7 @@ const HeroHeader = () => {
                                 <Button
                                     asChild
                                     size="sm"
-                                    className={cn(isScrolled && 'lg:hidden', 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700')}>
+                                    className={cn(isScrolled && 'lg:hidden', 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700 rounded-full')}>
                                     <Link href="/auth?tab=signup">
                                         <span>Sign Up</span>
                                     </Link>
@@ -280,7 +317,7 @@ const HeroHeader = () => {
                                 <Button
                                     asChild
                                     size="sm"
-                                    className={cn(isScrolled ? 'lg:inline-flex' : 'hidden', 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700')}>
+                                    className={cn(isScrolled ? 'lg:inline-flex' : 'hidden', 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white hover:from-soft-orange-600 hover:to-soft-orange-700 rounded-full')}>
                                     <Link href="/auth?tab=signup">
                                         <span>Get Started</span>
                                     </Link>

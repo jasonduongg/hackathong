@@ -145,6 +145,13 @@ export default function HowItWorks() {
                         );
                     })}
                 </div>
+
+                {/* Request Demo Button */}
+                <div className="text-center mt-16">
+                    <button className="bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white px-8 py-4 rounded-full font-semibold text-lg hover:from-soft-orange-600 hover:to-soft-orange-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                        Request Demo
+                    </button>
+                </div>
             </div>
         </section>
     );

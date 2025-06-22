@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useParty } from '@/contexts/PartyContext';
 import { PartyReceipt } from '@/types/receipt';
 import { UserProfile } from '@/lib/users';
@@ -14,6 +14,8 @@ interface PartyReceiptsProps {
     partyId: string;
     memberProfiles: UserProfile[];
 }
+
+const ITEMS_PER_PAGE = 5;
 
 const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }) => {
     const {
@@ -30,10 +32,40 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }
     const [showAssignmentFlow, setShowAssignmentFlow] = React.useState(false);
     const [refreshingUrl, setRefreshingUrl] = React.useState<string | null>(null);
     const [deletingReceipt, setDeletingReceipt] = React.useState<string | null>(null);
+    const [currentPage, setCurrentPage] = React.useState(1);
 
     useEffect(() => {
         fetchReceipts(partyId);
     }, [partyId, fetchReceipts]);
+
+    // Reset to first page when receipts change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [receipts.length]);
+
+    // Calculate pagination
+    const totalPages = Math.ceil(receipts.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const currentReceipts = receipts.slice(startIndex, endIndex);
+
+    const goToPage = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
+    const goToPreviousPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+        }
+    };
+
+    const goToNextPage = () => {
+        if (currentPage < totalPages) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
 
     const refreshSignedUrl = async (receiptId: string, s3Key: string) => {
         // This functionality may need to be moved to the context as well if it modifies shared state
@@ -131,8 +163,25 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-32">
-                <div className="text-gray-500">Loading receipts...</div>
+            <div className="space-y-4">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+                        <div className="flex items-start space-x-4">
+                            <div className="flex-shrink-0">
+                                <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                                <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                                <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                            </div>
+                            <div className="flex-shrink-0 space-y-2">
+                                <div className="h-8 bg-gray-200 rounded w-16"></div>
+                                <div className="h-8 bg-gray-200 rounded w-16"></div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
         );
     }
@@ -141,16 +190,6 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }
         <div className="space-y-6">
             {/* Receipts List */}
             <div className="">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
-                        <Receipt className="h-5 w-5" />
-                        <span>Party Receipts</span>
-                        {receipts.length > 0 && (
-                            <span className="text-sm text-gray-500">({receipts.length})</span>
-                        )}
-                    </h3>
-                </div>
-
                 {receipts.length === 0 ? (
                     <div className="text-center py-8">
                         <Receipt className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -158,21 +197,69 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }
                         <p className="text-sm text-gray-400 mt-1">Upload a receipt to get started</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        {receipts.map((receipt) => (
-                            <ReceiptCard
-                                key={receipt.id}
-                                receipt={receipt}
-                                memberProfiles={memberProfiles}
-                                onViewDetails={handleViewDetails}
-                                onViewImage={handleViewImage}
-                                onRefreshUrl={refreshSignedUrl}
-                                onDelete={deleteReceipt}
-                                refreshingUrl={refreshingUrl}
-                                deletingReceipt={deletingReceipt}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className="space-y-4">
+                            {currentReceipts.map((receipt) => (
+                                <ReceiptCard
+                                    key={receipt.id}
+                                    receipt={receipt}
+                                    memberProfiles={memberProfiles}
+                                    onViewDetails={handleViewDetails}
+                                    onViewImage={handleViewImage}
+                                    onRefreshUrl={refreshSignedUrl}
+                                    onDelete={deleteReceipt}
+                                    refreshingUrl={refreshingUrl}
+                                    deletingReceipt={deletingReceipt}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-sm text-gray-700">
+                                        Showing {startIndex + 1} to {Math.min(endIndex, receipts.length)} of {receipts.length} receipts
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={goToPreviousPage}
+                                        disabled={currentPage === 1}
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Previous page"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </button>
+
+                                    <div className="flex items-center space-x-1">
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                            <button
+                                                key={page}
+                                                onClick={() => goToPage(page)}
+                                                className={`px-3 py-1 text-sm rounded-md transition-colors ${currentPage === page
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'text-gray-600 hover:bg-gray-100'
+                                                    }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={goToNextPage}
+                                        disabled={currentPage === totalPages}
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Next page"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

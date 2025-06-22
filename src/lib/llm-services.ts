@@ -572,6 +572,31 @@ export async function processImageFile(
 export async function processMultipleImages(images: File[], promptType: string, enhancedContext?: string): Promise<any> {
     console.log(`Processing ${images.length} images with enhanced context`);
 
+    // VALIDATION: Check total payload size to prevent 413 errors
+    const MAX_TOTAL_SIZE = 25 * 1024 * 1024; // 25MB total limit
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB per image limit
+    const MAX_IMAGES = 10; // Maximum number of images
+
+    // Check number of images
+    if (images.length > MAX_IMAGES) {
+        throw new Error(`Too many images. Maximum allowed: ${MAX_IMAGES}, received: ${images.length}`);
+    }
+
+    // Check individual image sizes
+    for (let i = 0; i < images.length; i++) {
+        if (images[i].size > MAX_IMAGE_SIZE) {
+            throw new Error(`Image ${i + 1} too large: ${Math.round(images[i].size / 1024 / 1024)}MB (max ${MAX_IMAGE_SIZE / 1024 / 1024}MB)`);
+        }
+    }
+
+    // Check total size
+    const totalSize = images.reduce((sum, img) => sum + img.size, 0);
+    if (totalSize > MAX_TOTAL_SIZE) {
+        throw new Error(`Total payload too large: ${Math.round(totalSize / 1024 / 1024)}MB (max ${MAX_TOTAL_SIZE / 1024 / 1024}MB)`);
+    }
+
+    console.log(`Payload size validation passed: ${images.length} images, ${Math.round(totalSize / 1024 / 1024)}MB total`);
+
     const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
     });

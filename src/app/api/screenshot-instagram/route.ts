@@ -1,19 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 
-// Import chromium only for production environments
-let chromium: any = null;
-try {
-    chromium = require('@sparticuz/chromium');
-} catch (error) {
-    console.log('@sparticuz/chromium not available, will use regular puppeteer');
-}
-
 export const maxDuration = 60; // seconds
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// Simple in-memory cache for large screenshots (in production, use Redis or similar)
+const screenshotCache = new Map<string, { screenshots: string[], timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clean up expired cache entries
+function cleanupCache() {
+    const now = Date.now();
+    for (const [key, value] of screenshotCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+            screenshotCache.delete(key);
+        }
+    }
+}
+
+// Generate cache key from URL
+function generateCacheKey(url: string): string {
+    return `screenshot_${Buffer.from(url).toString('base64').substring(0, 50)}`;
+}
 
 export async function POST(request: NextRequest) {
     try {
+        // VALIDATION: Check request size before processing
+        const contentLength = request.headers.get('content-length');
+        if (contentLength) {
+            const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+            const MAX_REQUEST_SIZE = 10; // 10MB limit for this endpoint
+            if (sizeInMB > MAX_REQUEST_SIZE) {
+                return NextResponse.json(
+                    { error: `Request too large: ${sizeInMB.toFixed(1)}MB (max ${MAX_REQUEST_SIZE}MB)` },
+                    { status: 413 }
+                );
+            }
+            console.log(`Instagram screenshot request size: ${sizeInMB.toFixed(1)}MB`);
+        }
+
         const { url } = await request.json();
 
         if (!url || !url.includes('instagram.com')) {
@@ -86,51 +112,51 @@ export async function POST(request: NextRequest) {
         console.log('Launching browser with optimized configuration...');
 
         let browser;
+        const browserlessApiKey = process.env.BROWSERLESS_API_KEY;
+
         try {
-            if (chromium) {
-                // Production environment with @sparticuz/chromium
-                console.log('Using @sparticuz/chromium for production environment');
-                browser = await puppeteer.launch({
-                    args: [
-                        ...chromium.args,
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--single-process',
-                        '--disable-gpu',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--disable-features=TranslateUI',
-                        '--disable-ipc-flooding-protection',
-                        '--disable-default-apps',
-                        '--disable-extensions',
-                        '--disable-plugins',
-                        '--disable-images',
-                        '--disable-web-security',
-                        '--disable-features=VizDisplayCompositor',
-                        '--disable-software-rasterizer',
-                        '--disable-background-networking',
-                        '--disable-sync',
-                        '--disable-translate',
-                        '--hide-scrollbars',
-                        '--mute-audio',
-                        '--no-default-browser-check',
-                        '--safebrowsing-disable-auto-update',
-                        '--ignore-certificate-errors',
-                        '--ignore-ssl-errors',
-                        '--ignore-certificate-errors-spki-list',
-                        '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                    ],
-                    defaultViewport: chromium.defaultViewport,
-                    executablePath: await chromium.executablePath(),
-                    headless: chromium.headless,
-                    timeout: 20000, // REDUCED: Faster timeout
-                });
-                console.log('Browser launched successfully with @sparticuz/chromium');
+            if (browserlessApiKey) {
+                // Production environment with browserless.io
+                console.log('Using browserless.io for production environment');
+                console.log('API Key length:', browserlessApiKey.length);
+                console.log('API Key preview:', browserlessApiKey.substring(0, 10) + '...');
+
+                try {
+                    // Try the standard WebSocket endpoint first (US West - San Francisco)
+                    console.log('Attempting connection to: wss://production-sfo.browserless.io?token=...');
+                    browser = await puppeteer.connect({
+                        browserWSEndpoint: `wss://production-sfo.browserless.io?token=${browserlessApiKey}`,
+                        defaultViewport: { width: 1200, height: 800 },
+                    });
+                    console.log('Browser connected successfully with browserless.io (SFO)');
+                } catch (browserlessError) {
+                    console.error('Standard browserless.io connection failed:', browserlessError);
+                    console.error('Error details:', {
+                        message: browserlessError instanceof Error ? browserlessError.message : 'Unknown error',
+                        name: browserlessError instanceof Error ? browserlessError.name : 'Unknown',
+                        stack: browserlessError instanceof Error ? browserlessError.stack?.substring(0, 500) : 'No stack trace'
+                    });
+
+                    // Try alternative endpoint format
+                    try {
+                        console.log('Trying alternative browserless.io endpoint...');
+                        console.log('Attempting connection to: wss://production-sfo.browserless.io/?token=...');
+                        browser = await puppeteer.connect({
+                            browserWSEndpoint: `wss://production-sfo.browserless.io/?token=${browserlessApiKey}`,
+                            defaultViewport: { width: 1200, height: 800 },
+                        });
+                        console.log('Browser connected successfully with alternative browserless.io endpoint');
+                    } catch (altBrowserlessError) {
+                        console.error('Alternative browserless.io connection failed:', altBrowserlessError);
+                        console.error('Alternative error details:', {
+                            message: altBrowserlessError instanceof Error ? altBrowserlessError.message : 'Unknown error',
+                            name: altBrowserlessError instanceof Error ? altBrowserlessError.name : 'Unknown',
+                            stack: altBrowserlessError instanceof Error ? altBrowserlessError.stack?.substring(0, 500) : 'No stack trace'
+                        });
+                        console.log('Falling back to local puppeteer...');
+                        throw altBrowserlessError; // This will trigger the fallback
+                    }
+                }
             } else {
                 // Local development environment with regular puppeteer
                 console.log('Using regular puppeteer for local development');
@@ -483,8 +509,15 @@ export async function POST(request: NextRequest) {
             try {
                 console.log('Taking screenshot of first panel...');
                 const firstPanelScreenshot = await postElement.screenshot({
-                    type: 'png',
+                    type: 'jpeg', // Changed from PNG to JPEG for smaller size
+                    quality: 80, // JPEG quality setting for size optimization
                     encoding: 'binary',
+                    clip: { // Add clipping to reduce size
+                        x: 0,
+                        y: 0,
+                        width: 800, // Reduced from 1200
+                        height: 600  // Reduced from 800
+                    }
                 });
 
                 const base64 = Buffer.from(firstPanelScreenshot).toString('base64');
@@ -530,8 +563,15 @@ export async function POST(request: NextRequest) {
                         // Take screenshot of current panel
                         try {
                             const panelScreenshot = await postElement.screenshot({
-                                type: 'png',
+                                type: 'jpeg', // Changed from PNG to JPEG for smaller size
+                                quality: 80, // JPEG quality setting for size optimization
                                 encoding: 'binary',
+                                clip: { // Add clipping to reduce size
+                                    x: 0,
+                                    y: 0,
+                                    width: 800, // Reduced from 1200
+                                    height: 600  // Reduced from 800
+                                }
                             });
 
                             const base64 = Buffer.from(panelScreenshot).toString('base64');
@@ -596,7 +636,7 @@ export async function POST(request: NextRequest) {
                                             await new Promise(resolve => setTimeout(resolve, 100)); // REDUCED: From 200ms to 100ms
 
                                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                            const frameDataUrl = canvas.toDataURL('image/png', 0.8);
+                                            const frameDataUrl = canvas.toDataURL('image/jpeg', 0.8); // Changed from PNG to JPEG
                                             const frameData = frameDataUrl.split(',')[1];
                                             frames.push(frameData);
                                         }
@@ -628,8 +668,15 @@ export async function POST(request: NextRequest) {
             try {
                 console.log('Taking single panel screenshot...');
                 const postScreenshot = await postElement.screenshot({
-                    type: 'png',
+                    type: 'jpeg', // Changed from PNG to JPEG for smaller size
+                    quality: 80, // JPEG quality setting for size optimization
                     encoding: 'binary',
+                    clip: { // Add clipping to reduce size
+                        x: 0,
+                        y: 0,
+                        width: 800, // Reduced from 1200
+                        height: 600  // Reduced from 800
+                    }
                 });
 
                 const base64 = Buffer.from(postScreenshot).toString('base64');
@@ -677,7 +724,7 @@ export async function POST(request: NextRequest) {
                             await new Promise(resolve => setTimeout(resolve, 100)); // REDUCED: From 200ms to 100ms
 
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const frameDataUrl = canvas.toDataURL('image/png', 0.8);
+                            const frameDataUrl = canvas.toDataURL('image/jpeg', 0.8); // Changed from PNG to JPEG
                             const frameData = frameDataUrl.split(',')[1];
                             frames.push(frameData);
                         }
@@ -696,33 +743,136 @@ export async function POST(request: NextRequest) {
 
         await browser.close();
 
+        // FINAL VALIDATION: Check total response size
+        const totalScreenshotSize = screenshots.reduce((total, screenshot) => total + screenshot.length, 0);
+        const totalSizeInMB = totalScreenshotSize / (1024 * 1024);
+        const MAX_RESPONSE_SIZE = 25; // 25MB limit for response
+
+        if (totalSizeInMB > MAX_RESPONSE_SIZE) {
+            console.warn(`Response size ${totalSizeInMB.toFixed(1)}MB exceeds limit ${MAX_RESPONSE_SIZE}MB, truncating screenshots`);
+            // Keep only the first few screenshots to stay under limit
+            const maxScreenshots = Math.floor(MAX_RESPONSE_SIZE * 1024 * 1024 / (totalScreenshotSize / screenshots.length));
+            screenshots.splice(maxScreenshots);
+        }
+
         console.log('Screenshots taken successfully:', screenshots.length);
         console.log('Screenshot breakdown:', {
             comprehensiveScreenshots: finalCarouselInfo.isCarousel ? actualPanelCount : 1,
             videoScreenshots: screenshots.length - (finalCarouselInfo.isCarousel ? actualPanelCount : 1),
             isCarousel: finalCarouselInfo.isCarousel,
             panelCount: actualPanelCount,
-            originalPanelCount: finalCarouselInfo.panelCount
+            originalPanelCount: finalCarouselInfo.panelCount,
+            totalSizeMB: totalSizeInMB.toFixed(1)
         });
 
-        return NextResponse.json({
+        // OPTIMIZATION: Return only essential data to reduce response size
+        // Screenshots are the largest part of the response, so we'll return them separately
+        const responseData = {
             success: true,
-            screenshots: screenshots,
-            contentType: 'image/png',
+            screenshotCount: screenshots.length,
+            contentType: 'image/jpeg',
             captionText: extractedData.caption,
             accountMentions: extractedData.accountMentions,
             locationTags: extractedData.locationTags,
             hashtags: extractedData.hashtags,
             allText: extractedData.allText.substring(0, 500) + '...',
-            screenshotCount: screenshots.length,
             videoDuration: videoDuration,
             isCarousel: finalCarouselInfo.isCarousel,
             panelCount: actualPanelCount,
-            originalPanelCount: finalCarouselInfo.panelCount
+            originalPanelCount: finalCarouselInfo.panelCount,
+            totalSizeMB: totalSizeInMB.toFixed(1)
+        };
+
+        // If response is still too large, return only metadata and provide a separate endpoint for screenshots
+        if (totalSizeInMB > 15) { // 15MB threshold for full response
+            console.log('Response size large, caching screenshots and returning metadata only');
+
+            // Cache the screenshots
+            const cacheKey = generateCacheKey(url);
+            screenshotCache.set(cacheKey, {
+                screenshots: screenshots,
+                timestamp: Date.now()
+            });
+
+            // Clean up old cache entries
+            cleanupCache();
+
+            return NextResponse.json({
+                ...responseData,
+                screenshots: null, // Don't include screenshots in main response
+                hasLargeScreenshots: true,
+                cacheKey: cacheKey,
+                message: 'Screenshots cached and available via separate endpoint due to size'
+            });
+        }
+
+        return NextResponse.json({
+            ...responseData,
+            screenshots: screenshots
         });
 
     } catch (error: any) {
         console.error('Instagram screenshot error:', error);
         return NextResponse.json({ error: error.message || 'Failed to screenshot Instagram content.' }, { status: 500 });
+    }
+}
+
+// GET method to handle separate screenshot requests for large responses
+export async function GET(request: NextRequest) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const url = searchParams.get('url');
+        const cacheKey = searchParams.get('cacheKey');
+        const screenshotIndex = searchParams.get('index');
+
+        if (cacheKey) {
+            // Return cached screenshots
+            const cached = screenshotCache.get(cacheKey);
+            if (!cached) {
+                return NextResponse.json({ error: 'Cached screenshots not found or expired' }, { status: 404 });
+            }
+
+            // Check if cache is expired
+            if (Date.now() - cached.timestamp > CACHE_TTL) {
+                screenshotCache.delete(cacheKey);
+                return NextResponse.json({ error: 'Cached screenshots expired' }, { status: 410 });
+            }
+
+            // Return specific screenshot if index provided
+            if (screenshotIndex !== null) {
+                const index = parseInt(screenshotIndex);
+                if (isNaN(index) || index < 0 || index >= cached.screenshots.length) {
+                    return NextResponse.json({ error: 'Invalid screenshot index' }, { status: 400 });
+                }
+                return NextResponse.json({
+                    screenshot: cached.screenshots[index],
+                    index: index,
+                    total: cached.screenshots.length
+                });
+            }
+
+            // Return all screenshots
+            return NextResponse.json({
+                screenshots: cached.screenshots,
+                count: cached.screenshots.length,
+                cachedAt: cached.timestamp
+            });
+        }
+
+        if (!url) {
+            return NextResponse.json({ error: 'URL parameter is required' }, { status: 400 });
+        }
+
+        // This would typically involve caching or storing screenshots temporarily
+        // For now, we'll return a message indicating this feature is available
+        return NextResponse.json({
+            message: 'Separate screenshot endpoint available',
+            note: 'For large responses, screenshots can be requested individually',
+            usage: 'Use POST method for full screenshot capture, then GET with cacheKey for individual screenshots'
+        });
+
+    } catch (error: any) {
+        console.error('Screenshot retrieval error:', error);
+        return NextResponse.json({ error: error.message || 'Failed to retrieve screenshot.' }, { status: 500 });
     }
 } 

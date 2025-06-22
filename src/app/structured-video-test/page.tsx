@@ -34,16 +34,16 @@ export default function StructuredVideoTest() {
     } | null>(null);
 
     const updateStep = (stepId: string, updates: Partial<ProgressStep>) => {
-        setProgressSteps(prev => prev.map(step => 
+        setProgressSteps(prev => prev.map(step =>
             step.id === stepId ? { ...step, ...updates } : step
         ));
     };
 
     const startStep = (stepId: string) => {
-        updateStep(stepId, { 
-            status: 'running', 
+        updateStep(stepId, {
+            status: 'running',
             startTime: Date.now(),
-            percentage: 0 
+            percentage: 0
         });
     };
 
@@ -51,20 +51,20 @@ export default function StructuredVideoTest() {
         const step = progressSteps.find(s => s.id === stepId);
         const endTime = Date.now();
         const duration = step?.startTime ? endTime - step.startTime : undefined;
-        
-        updateStep(stepId, { 
-            status: 'completed', 
+
+        updateStep(stepId, {
+            status: 'completed',
             percentage,
             endTime,
             duration,
-            details 
+            details
         });
     };
 
     const errorStep = (stepId: string, errorMessage: string) => {
-        updateStep(stepId, { 
-            status: 'error', 
-            details: errorMessage 
+        updateStep(stepId, {
+            status: 'error',
+            details: errorMessage
         });
     };
 
@@ -81,7 +81,7 @@ export default function StructuredVideoTest() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!url.trim()) {
             setError('Please enter a URL');
             return;
@@ -98,7 +98,7 @@ export default function StructuredVideoTest() {
         setLoading(true);
         setError(null);
         setResult(null);
-        
+
         // Initialize progress steps
         const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
         const initialSteps: ProgressStep[] = isInstagram ? [
@@ -114,42 +114,82 @@ export default function StructuredVideoTest() {
             { id: 'validate', title: 'Validating Results', status: 'pending', percentage: 0 },
             { id: 'complete', title: 'Finalizing', status: 'pending', percentage: 0 }
         ];
-        
+
         setProgressSteps(initialSteps);
         setOverallPercentage(0);
 
         try {
             const formData = new FormData();
-            
+
             // Check if it's an Instagram URL
             const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
-            
+
             if (isInstagram) {
                 // Step 1: Initialize
                 startStep('init');
                 updateStep('init', { percentage: 50, details: 'Preparing Instagram analysis' });
                 await new Promise(resolve => setTimeout(resolve, 500));
                 completeStep('init', 100, 'Analysis initialized successfully');
-                
+
                 // Step 2: Take screenshots
                 startStep('screenshot');
                 updateStep('screenshot', { percentage: 20, details: 'Loading Instagram page' });
-                
+
                 const screenshotRes = await fetch('/api/screenshot-instagram', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ url })
                 });
-                
-                updateStep('screenshot', { percentage: 60, details: 'Capturing screenshots' });
-                
-                const screenshotData = await screenshotRes.json();
-                if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
-                    throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
+
+                if (!screenshotRes.ok) {
+                    const errorData = await screenshotRes.json();
+                    if (screenshotRes.status === 413) {
+                        throw new Error(`Request too large: ${errorData.error}. Try with fewer images or a shorter video.`);
+                    }
+                    throw new Error(errorData.error || 'Failed to take screenshots');
                 }
-                
-                updateStep('screenshot', { percentage: 80, details: 'Processing captured images' });
-                
+
+                const screenshotData = await screenshotRes.json();
+
+                // VALIDATION: Check screenshot data size
+                if (screenshotData.screenshots && screenshotData.screenshots.length > 0) {
+                    const totalSize = screenshotData.screenshots.reduce((sum: number, screenshot: string) => sum + screenshot.length, 0);
+                    const sizeInMB = totalSize / (1024 * 1024);
+                    console.log(`Screenshot payload size: ${sizeInMB.toFixed(1)}MB`);
+
+                    if (sizeInMB > 20) { // 20MB client-side limit
+                        throw new Error(`Screenshot payload too large: ${sizeInMB.toFixed(1)}MB. Try with a shorter video or fewer images.`);
+                    }
+                }
+
+                // Handle case where screenshots are not included due to size
+                if (!screenshotData.screenshots || screenshotData.screenshots.length === 0) {
+                    if (screenshotData.hasLargeScreenshots && screenshotData.cacheKey) {
+                        // Fetch screenshots from cache
+                        console.log('Fetching large screenshots from cache...');
+                        const cacheResponse = await fetch(`/api/screenshot-instagram?cacheKey=${screenshotData.cacheKey}`);
+
+                        if (cacheResponse.ok) {
+                            const cacheData = await cacheResponse.json();
+                            if (cacheData.screenshots && cacheData.screenshots.length > 0) {
+                                // Replace the screenshot data with cached data
+                                screenshotData.screenshots = cacheData.screenshots;
+                                console.log(`Retrieved ${cacheData.screenshots.length} screenshots from cache`);
+                            } else {
+                                throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                            }
+                        } else {
+                            throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                        }
+                    } else if (screenshotData.hasLargeScreenshots) {
+                        throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                    } else {
+                        throw new Error('Failed to screenshot Instagram post');
+                    }
+                }
+
                 // Store Instagram data for display
                 setInstagramData({
                     screenshots: screenshotData.screenshots || [screenshotData.image],
@@ -161,63 +201,64 @@ export default function StructuredVideoTest() {
                     screenshotCount: screenshotData.screenshotCount || 1,
                     videoDuration: screenshotData.videoDuration || 0
                 });
-                
-                const durationText = screenshotData.videoDuration > 0 
+
+                const durationText = screenshotData.videoDuration > 0
                     ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
                     : ` (${screenshotData.screenshotCount} screenshots)`;
-                
+
                 completeStep('screenshot', 100, `Captured ${screenshotData.screenshotCount} screenshots${durationText}`);
-                
+
                 // Step 3: Process screenshots
                 startStep('process');
                 updateStep('process', { percentage: 30, details: 'Preparing screenshots for AI analysis' });
-                
+
                 // Create a combined analysis request with all screenshots
                 const analysisFormData = new FormData();
-                
+
                 screenshotData.screenshots.forEach((screenshot: string, index: number) => {
+                    // Convert base64 string to File object
                     const byteString = atob(screenshot);
                     const ab = new ArrayBuffer(byteString.length);
                     const ia = new Uint8Array(ab);
                     for (let i = 0; i < byteString.length; i++) {
                         ia[i] = byteString.charCodeAt(i);
                     }
-                    const blob = new Blob([ab], { type: 'image/png' });
-                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
+                    const blob = new Blob([ab], { type: 'image/jpeg' });
+                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.jpg`);
                 });
-                
+
                 updateStep('process', { percentage: 60, details: 'Converting images to base64' });
-                
+
                 analysisFormData.append('promptType', 'structured');
                 analysisFormData.append('provider', 'anthropic');
                 analysisFormData.append('analysisMode', 'multi-screenshot');
-                
+
                 if (screenshotData.captionText) {
                     analysisFormData.append('captionText', screenshotData.captionText);
                 }
-                
+
                 if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
                     analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
                 }
-                
+
                 if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
                     analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
                 }
-                
+
                 if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
                     analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
                 }
-                
+
                 if (screenshotData.videoDuration > 0) {
                     analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
                 }
-                
+
                 completeStep('process', 100, 'Screenshots prepared for analysis');
-                
+
                 // Step 4: AI Analysis
                 startStep('analyze');
                 updateStep('analyze', { percentage: 20, details: 'Sending to Claude for analysis' });
-                
+
                 const response = await fetch('/api/process-video', {
                     method: 'POST',
                     body: analysisFormData
@@ -233,19 +274,19 @@ export default function StructuredVideoTest() {
                 }
 
                 completeStep('analyze', 100, 'AI analysis completed');
-                
+
                 // Step 5: Validate results
                 startStep('validate');
                 updateStep('validate', { percentage: 50, details: 'Validating places and locations' });
-                
+
                 // Use the enhanced structured data from the API
                 if (data.structuredData) {
                     completeStep('validate', 100, 'Results validated successfully');
-                    
+
                     // Step 6: Complete
                     startStep('complete');
                     updateStep('complete', { percentage: 100, details: 'Results ready' });
-                    
+
                     // Combine structuredData with other top-level fields
                     setResult({
                         ...data.structuredData,
@@ -255,7 +296,7 @@ export default function StructuredVideoTest() {
                         geocodedPlaces: data.geocodedPlaces,
                         processingInfo: data.processingInfo
                     });
-                    
+
                     completeStep('complete', 100, 'Analysis complete!');
                 } else {
                     errorStep('validate', 'Failed to get structured data from API response');
@@ -267,11 +308,11 @@ export default function StructuredVideoTest() {
                 updateStep('init', { percentage: 50, details: 'Preparing analysis' });
                 await new Promise(resolve => setTimeout(resolve, 500));
                 completeStep('init', 100, 'Analysis initialized');
-                
+
                 formData.append('url', url);
                 formData.append('promptType', 'structured');
                 formData.append('provider', 'anthropic');
-                
+
                 startStep('analyze');
                 updateStep('analyze', { percentage: 30, details: 'Processing with Claude' });
 
@@ -289,16 +330,16 @@ export default function StructuredVideoTest() {
                 }
 
                 completeStep('analyze', 100, 'AI analysis completed');
-                
+
                 startStep('validate');
                 updateStep('validate', { percentage: 50, details: 'Validating results' });
 
                 if (data.structuredData) {
                     completeStep('validate', 100, 'Results validated');
-                    
+
                     startStep('complete');
                     updateStep('complete', { percentage: 100, details: 'Results ready' });
-                    
+
                     const fullResult = {
                         ...data.structuredData,
                         deducedRestaurant: data.deducedRestaurant,
@@ -310,7 +351,7 @@ export default function StructuredVideoTest() {
                         hasMultipleRestaurants: data.hasMultipleRestaurants
                     };
                     setResult(fullResult);
-                    
+
                     completeStep('complete', 100, 'Analysis complete!');
                 } else {
                     errorStep('validate', 'Failed to get structured data from API response');
@@ -321,7 +362,7 @@ export default function StructuredVideoTest() {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
             setError(errorMessage);
-            
+
             // Mark current step as error
             const currentStep = progressSteps.find(step => step.status === 'running');
             if (currentStep) {
@@ -342,11 +383,11 @@ export default function StructuredVideoTest() {
     const extractVideoFrames = async (videoFile: File): Promise<string[]> => {
         return new Promise((resolve, reject) => {
             console.log('Starting frame extraction for:', videoFile.name);
-            
+
             const video = document.createElement('video');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
+
             if (!ctx) {
                 reject(new Error('Could not create canvas context'));
                 return;
@@ -354,30 +395,30 @@ export default function StructuredVideoTest() {
 
             const frames: string[] = [];
             const videoUrl = URL.createObjectURL(videoFile);
-            
+
             video.onloadedmetadata = () => {
                 console.log('Video metadata loaded:', {
                     duration: video.duration,
                     width: video.videoWidth,
                     height: video.videoHeight
                 });
-                
+
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                
+
                 // Extract 1 frame per 2 seconds
                 const frameInterval = 2; // seconds
                 const totalFrames = Math.ceil(video.duration / frameInterval);
                 const timestamps: number[] = [];
-                
+
                 for (let i = 0; i < totalFrames; i++) {
                     timestamps.push(i * frameInterval);
                 }
-                
+
                 let frameIndex = 0;
-                
+
                 console.log(`Extracting ${timestamps.length} frames at 1 frame every ${frameInterval} seconds`);
-                
+
                 const extractFrame = () => {
                     if (frameIndex >= timestamps.length) {
                         console.log('Frame extraction complete, extracted frames:', frames.length);
@@ -385,20 +426,20 @@ export default function StructuredVideoTest() {
                         resolve(frames);
                         return;
                     }
-                    
+
                     const currentTime = timestamps[frameIndex];
                     const progressPercentage = ((frameIndex + 1) / timestamps.length) * 100;
                     setProgressSteps(prev => [
-                        ...prev.map(step => 
+                        ...prev.map(step =>
                             step.id === 'extract' ? { ...step, percentage: progressPercentage } : step
                         ),
                         { id: 'extract', title: 'Extracting Frames', status: 'running', percentage: progressPercentage }
                     ]);
-                    
+
                     console.log(`Extracting frame ${frameIndex + 1} at time ${currentTime}s`);
                     video.currentTime = currentTime;
                 };
-                
+
                 video.onseeked = () => {
                     try {
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -414,22 +455,22 @@ export default function StructuredVideoTest() {
                         reject(new Error(`Failed to extract frame ${frameIndex + 1}: ${error}`));
                     }
                 };
-                
+
                 video.onerror = (error) => {
                     console.error('Video error:', error);
                     URL.revokeObjectURL(videoUrl);
                     reject(new Error('Failed to load video'));
                 };
-                
+
                 extractFrame();
             };
-            
+
             video.onerror = () => {
                 console.error('Failed to load video metadata');
                 URL.revokeObjectURL(videoUrl);
                 reject(new Error('Failed to load video'));
             };
-            
+
             video.src = videoUrl;
         });
     };
@@ -452,17 +493,17 @@ export default function StructuredVideoTest() {
 
                 <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                     <p className="text-yellow-800 text-sm">
-                        <strong>Test Mode:</strong> This page shows detailed debugging information and raw data. 
+                        <strong>Test Mode:</strong> This page shows detailed debugging information and raw data.
                         For a cleaner user experience, visit the <a href="/restaurant-analyzer" className="text-blue-600 hover:text-blue-800 underline">Restaurant Analyzer</a>.
                     </p>
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                     <h2 className="text-xl font-semibold mb-4">Analyze Videos</h2>
-                    
+
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
                         <p className="text-blue-800 text-sm">
-                            <strong>Enhanced Analysis:</strong> The system takes targeted screenshots - separate screenshots of caption text and video content only (not entire UI). 
+                            <strong>Enhanced Analysis:</strong> The system takes targeted screenshots - separate screenshots of caption text and video content only (not entire UI).
                             For videos: 1 frame every 2 seconds + caption screenshot if available.
                             Uses AI to identify and validate restaurant names using Google Maps API, ensuring accurate place identification from multiple locations.
                             All screenshots are analyzed together for comprehensive results with restaurant deduction.
@@ -517,19 +558,19 @@ export default function StructuredVideoTest() {
                 {result && (
                     <div className="bg-white rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold mb-4">Analysis Results</h2>
-                        
+
                         {/* Instagram Screenshot and Data Display */}
                         {instagramData && (
                             <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-md">
                                 <h3 className="font-medium text-gray-900 mb-3">Instagram Post Analysis</h3>
-                                
+
                                 {/* Screenshots */}
                                 <div className="mb-4">
                                     <h4 className="text-sm font-medium text-gray-700 mb-2">
                                         Screenshots ({instagramData?.screenshotCount || 0} total):
                                         {instagramData?.videoDuration && instagramData.videoDuration > 0 && (
                                             <span className="text-xs text-gray-500 ml-2">
-                                                Video duration: {Math.round(instagramData.videoDuration)}s 
+                                                Video duration: {Math.round(instagramData.videoDuration)}s
                                                 ({Math.round(instagramData.videoDuration / 60)}m {Math.round(instagramData.videoDuration % 60)}s)
                                             </span>
                                         )}
@@ -541,7 +582,7 @@ export default function StructuredVideoTest() {
                                             const isDebugScreenshot = index === 0; // First screenshot is always debug
                                             const isCaptionScreenshot = hasCaption && index === 1; // Second screenshot is caption (if exists)
                                             const isVideoScreenshot = hasCaption ? index > 1 : index > 0; // Rest are video screenshots
-                                            
+
                                             return (
                                                 <div key={index} className="border border-gray-200 rounded p-2">
                                                     <div className="text-xs text-gray-500 mb-2">
@@ -568,8 +609,8 @@ export default function StructuredVideoTest() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <img 
-                                                        src={`data:image/png;base64,${screenshot}`}
+                                                    <img
+                                                        src={`data:image/jpeg;base64,${screenshot}`}
                                                         alt={`Instagram post screenshot ${index + 1}`}
                                                         className="max-w-full h-auto border border-gray-300 rounded"
                                                         style={{ maxHeight: '400px' }}
@@ -579,7 +620,7 @@ export default function StructuredVideoTest() {
                                         })}
                                     </div>
                                 </div>
-                                
+
                                 {/* Caption Display */}
                                 {instagramData.captionText && (
                                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -589,7 +630,7 @@ export default function StructuredVideoTest() {
                                         </p>
                                     </div>
                                 )}
-                                
+
                                 {/* Extracted Information */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Caption */}
@@ -601,7 +642,7 @@ export default function StructuredVideoTest() {
                                             </p>
                                         </div>
                                     )}
-                                    
+
                                     {/* Account Mentions */}
                                     {instagramData.accountMentions.length > 0 && (
                                         <div>
@@ -615,7 +656,7 @@ export default function StructuredVideoTest() {
                                             </div>
                                         </div>
                                     )}
-                                    
+
                                     {/* Location Tags */}
                                     {instagramData.locationTags.length > 0 && (
                                         <div>
@@ -629,7 +670,7 @@ export default function StructuredVideoTest() {
                                             </div>
                                         </div>
                                     )}
-                                    
+
                                     {/* Hashtags */}
                                     {instagramData.hashtags.length > 0 && (
                                         <div>
@@ -649,7 +690,7 @@ export default function StructuredVideoTest() {
                                         </div>
                                     )}
                                 </div>
-                                
+
                                 {/* All Text (truncated) */}
                                 {instagramData.allText && (
                                     <div className="mt-4">
@@ -661,7 +702,7 @@ export default function StructuredVideoTest() {
                                 )}
                             </div>
                         )}
-                        
+
                         {result.captionText && (
                             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
                                 <p className="text-green-700 text-sm">
@@ -669,7 +710,7 @@ export default function StructuredVideoTest() {
                                 </p>
                             </div>
                         )}
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
                                 <div>
@@ -704,15 +745,15 @@ export default function StructuredVideoTest() {
                                             <p className="text-sm text-gray-600 mt-1">
                                                 AI-analyzed from all available data including place names, context clues, and location information
                                             </p>
-                                            
+
                                             {/* Restaurant Details */}
                                             {result.restaurantDetails && (
                                                 <div className="mt-3 p-3 bg-white rounded border">
                                                     {/* Restaurant Image */}
                                                     {result.restaurantDetails.image && (
                                                         <div className="mb-3">
-                                                            <img 
-                                                                src={result.restaurantDetails.image} 
+                                                            <img
+                                                                src={result.restaurantDetails.image}
                                                                 alt={`${result.restaurantDetails.name} restaurant`}
                                                                 className="w-full h-32 object-cover rounded border"
                                                                 onError={(e) => {
@@ -722,7 +763,7 @@ export default function StructuredVideoTest() {
                                                             />
                                                         </div>
                                                     )}
-                                                    
+
                                                     {result.restaurantDetails.isChain ? (
                                                         <div className="text-sm">
                                                             <div className="flex items-center gap-2 mb-2">
@@ -742,19 +783,19 @@ export default function StructuredVideoTest() {
                                                                 <span className="text-green-600">📍</span>
                                                                 <span className="font-medium text-green-800">Single Location</span>
                                                             </div>
-                                                            
+
                                                             {result.restaurantDetails.address && (
                                                                 <p className="text-gray-600 mb-1">
                                                                     <strong>Address:</strong> {result.restaurantDetails.address}
                                                                 </p>
                                                             )}
-                                                            
+
                                                             {result.restaurantDetails.website && (
                                                                 <p className="text-gray-600 mb-1">
-                                                                    <strong>Website:</strong> 
-                                                                    <a 
-                                                                        href={result.restaurantDetails.website} 
-                                                                        target="_blank" 
+                                                                    <strong>Website:</strong>
+                                                                    <a
+                                                                        href={result.restaurantDetails.website}
+                                                                        target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="text-blue-600 hover:text-blue-800 ml-1"
                                                                     >
@@ -762,19 +803,19 @@ export default function StructuredVideoTest() {
                                                                     </a>
                                                                 </p>
                                                             )}
-                                                            
+
                                                             {result.restaurantDetails.phone && (
                                                                 <p className="text-gray-600 mb-1">
                                                                     <strong>Phone:</strong> {result.restaurantDetails.phone}
                                                                 </p>
                                                             )}
-                                                            
+
                                                             {result.restaurantDetails.rating && (
                                                                 <p className="text-gray-600 mb-1">
                                                                     <strong>Rating:</strong> ⭐ {result.restaurantDetails.rating}/5
                                                                 </p>
                                                             )}
-                                                            
+
                                                             {result.restaurantDetails.hours && result.restaurantDetails.hours.length > 0 && (
                                                                 <div className="mt-2">
                                                                     <p className="font-medium text-gray-700 mb-1">Hours:</p>
@@ -919,13 +960,12 @@ export default function StructuredVideoTest() {
                                                 <span className="font-medium text-gray-900">
                                                     {place.originalName}
                                                 </span>
-                                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                                    place.confidence >= 0.7 
-                                                        ? 'bg-green-100 text-green-800' 
-                                                        : place.confidence >= 0.4 
+                                                <span className={`px-2 py-1 text-xs rounded-full ${place.confidence >= 0.7
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : place.confidence >= 0.4
                                                         ? 'bg-yellow-100 text-yellow-800'
                                                         : 'bg-red-100 text-red-800'
-                                                }`}>
+                                                    }`}>
                                                     {Math.round(place.confidence * 100)}% confidence
                                                 </span>
                                             </div>

@@ -3,6 +3,10 @@ import { processURLWithLLM, processVideoFile, processVideoFrames, processImageFi
 import { getLocationData, getBestLocation, geocodeLocation, enhancePlaceNamesWithSearch, getPlaceDetails } from '@/lib/location-services';
 import { parseStructuredVideoData } from '@/lib/prompts';
 
+// Configure runtime for this API route
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 5 minutes timeout
+
 // Function to calculate string similarity (Levenshtein distance based)
 function calculateStringSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2;
@@ -111,7 +115,7 @@ async function checkIfChainRestaurant(restaurantName: string): Promise<boolean> 
     ];
 
     const normalizedName = restaurantName.toLowerCase().replace(/[^a-z0-9\s]/g, '');
-    
+
     return chainRestaurants.some(chain => {
         const normalizedChain = chain.toLowerCase().replace(/[^a-z0-9\s]/g, '');
         return normalizedName.includes(normalizedChain) || normalizedChain.includes(normalizedName);
@@ -207,7 +211,7 @@ async function performOptimizedRestaurantDeduction(
 
         // Check if this is a chain restaurant
         const isChain = await checkIfChainRestaurant(restaurantName);
-        
+
         let finalRestaurantDetails: any = {
             name: restaurantName,
             isChain: isChain,
@@ -225,7 +229,7 @@ async function performOptimizedRestaurantDeduction(
         if (isChain && partyId) {
             try {
                 console.log(`Chain detected: ${restaurantName}, searching for closest location...`);
-                
+
                 const chainLocationResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/search-restaurant`, {
                     method: 'POST',
                     headers: {
@@ -331,6 +335,20 @@ async function performOptimizedRestaurantDeduction(
 
 export async function POST(request: NextRequest) {
     try {
+        // VALIDATION: Check request size before processing
+        const contentLength = request.headers.get('content-length');
+        if (contentLength) {
+            const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+            const MAX_REQUEST_SIZE = 50; // 50MB limit
+            if (sizeInMB > MAX_REQUEST_SIZE) {
+                return NextResponse.json(
+                    { error: `Request too large: ${sizeInMB.toFixed(1)}MB (max ${MAX_REQUEST_SIZE}MB)` },
+                    { status: 413 }
+                );
+            }
+            console.log(`Request size: ${sizeInMB.toFixed(1)}MB`);
+        }
+
         const formData = await request.formData();
         const videoFile = formData.get('video') as File;
         const imageFile = formData.get('image') as File;
@@ -359,6 +377,8 @@ export async function POST(request: NextRequest) {
 
         // Handle multiple images (Instagram screenshots) - OPTIMIZED
         if (images && images.length > 0) {
+            console.log(`Processing ${images.length} images with prompt type: ${promptType}`);
+
             // Validate all files are images
             for (const img of images) {
                 if (!img.type.startsWith('image/')) {
@@ -381,8 +401,11 @@ export async function POST(request: NextRequest) {
                 `This is a series of ${images.length} screenshots from an Instagram video. Analyze all screenshots together to provide a comprehensive understanding of the content.`
             ].filter(Boolean).join('');
 
+            console.log('Enhanced context prepared, calling processMultipleImages...');
+
             // Process all images together
             llmResponse = await processMultipleImages(images, promptType, enhancedContext);
+            console.log('processMultipleImages completed successfully');
         }
         // Handle video frames processing
         else if (frames && frames.length > 0) {
@@ -447,13 +470,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Parse the structured data
+        console.log('Parsing structured data from LLM response...');
         const structuredData = parseStructuredVideoData(llmResponse.analysis);
         if (!structuredData) {
+            console.error('Failed to parse structured data. LLM response:', llmResponse);
             return NextResponse.json(
                 { error: 'Failed to parse structured data from LLM response' },
                 { status: 500 }
             );
         }
+        console.log('Structured data parsed successfully:', structuredData);
 
         // OPTIMIZED: Only enhance place names if we have them and they're not empty
         let enhancedPlaces: any[] = [];
@@ -537,8 +563,21 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Error processing content:', error);
+
+        // Provide more detailed error information
+        let errorMessage = 'Failed to process content';
+        if (error instanceof Error) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        }
+
         return NextResponse.json(
-            { error: 'Failed to process content' },
+            {
+                error: errorMessage,
+                details: error instanceof Error ? error.stack : undefined,
+                timestamp: new Date().toISOString()
+            },
             { status: 500 }
         );
     }

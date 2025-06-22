@@ -85,12 +85,57 @@ export default function RestaurantAnalyzer() {
 
                 const screenshotRes = await fetch('/api/screenshot-instagram', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ url })
                 });
+
+                if (!screenshotRes.ok) {
+                    const errorData = await screenshotRes.json();
+                    if (screenshotRes.status === 413) {
+                        throw new Error(`Request too large: ${errorData.error}. Try with fewer images or a shorter video.`);
+                    }
+                    throw new Error(errorData.error || 'Failed to take screenshots');
+                }
+
                 const screenshotData = await screenshotRes.json();
-                if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
-                    throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
+
+                // VALIDATION: Check screenshot data size
+                if (screenshotData.screenshots && screenshotData.screenshots.length > 0) {
+                    const totalSize = screenshotData.screenshots.reduce((sum: number, screenshot: string) => sum + screenshot.length, 0);
+                    const sizeInMB = totalSize / (1024 * 1024);
+                    console.log(`Screenshot payload size: ${sizeInMB.toFixed(1)}MB`);
+
+                    if (sizeInMB > 20) { // 20MB client-side limit
+                        throw new Error(`Screenshot payload too large: ${sizeInMB.toFixed(1)}MB. Try with a shorter video or fewer images.`);
+                    }
+                }
+
+                // Handle case where screenshots are not included due to size
+                if (!screenshotData.screenshots || screenshotData.screenshots.length === 0) {
+                    if (screenshotData.hasLargeScreenshots && screenshotData.cacheKey) {
+                        // Fetch screenshots from cache
+                        console.log('Fetching large screenshots from cache...');
+                        const cacheResponse = await fetch(`/api/screenshot-instagram?cacheKey=${screenshotData.cacheKey}`);
+
+                        if (cacheResponse.ok) {
+                            const cacheData = await cacheResponse.json();
+                            if (cacheData.screenshots && cacheData.screenshots.length > 0) {
+                                // Replace the screenshot data with cached data
+                                screenshotData.screenshots = cacheData.screenshots;
+                                console.log(`Retrieved ${cacheData.screenshots.length} screenshots from cache`);
+                            } else {
+                                throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                            }
+                        } else {
+                            throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                        }
+                    } else if (screenshotData.hasLargeScreenshots) {
+                        throw new Error(`Screenshots too large (${screenshotData.totalSizeMB}MB). Try with a shorter video or fewer images.`);
+                    } else {
+                        throw new Error('Failed to screenshot Instagram post');
+                    }
                 }
 
                 setInstagramData({
@@ -115,14 +160,15 @@ export default function RestaurantAnalyzer() {
                 const analysisFormData = new FormData();
 
                 screenshotData.screenshots.forEach((screenshot: string, index: number) => {
+                    // Convert base64 string to File object
                     const byteString = atob(screenshot);
                     const ab = new ArrayBuffer(byteString.length);
                     const ia = new Uint8Array(ab);
                     for (let i = 0; i < byteString.length; i++) {
                         ia[i] = byteString.charCodeAt(i);
                     }
-                    const blob = new Blob([ab], { type: 'image/png' });
-                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
+                    const blob = new Blob([ab], { type: 'image/jpeg' });
+                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.jpg`);
                 });
 
                 analysisFormData.append('promptType', 'structured');
@@ -402,8 +448,8 @@ export default function RestaurantAnalyzer() {
                                             <div className="md:col-span-2 mb-6">
                                                 <h4 className="font-medium text-gray-900 mb-3">Restaurant Photo</h4>
                                                 <div className="relative">
-                                                    <img 
-                                                        src={getSelectedRestaurantDetails()?.image || ''} 
+                                                    <img
+                                                        src={getSelectedRestaurantDetails()?.image || ''}
                                                         alt={`${selectedRestaurant} restaurant`}
                                                         className="w-full h-64 object-cover rounded-lg shadow-md"
                                                         onError={(e) => {

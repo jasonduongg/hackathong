@@ -339,21 +339,9 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                         <div className="bg-gray-50 rounded-lg p-4">
                             {/* Restaurant Name and Rating Header */}
                             <div className="flex justify-between items-center mb-2">
-                                <div className="flex items-center gap-2">
-                                    <h4 className="text-2xl font-bold text-gray-900">
-                                        {event.restaurantData.restaurant?.name || 'N/A'}
-                                    </h4>
-                                    {event.restaurantData.restaurant?.website && (
-                                        <a
-                                            href={event.restaurantData.restaurant.website}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-2xl hover:opacity-70 transition-opacity"
-                                        >
-                                            💻
-                                        </a>
-                                    )}
-                                </div>
+                                <h4 className="text-2xl font-bold text-gray-900">
+                                    {event.restaurantData.restaurant?.name || 'N/A'}
+                                </h4>
                                 <div className="flex items-center">
                                     {event.restaurantData.restaurant?.rating ? (
                                         <>
@@ -389,7 +377,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                             {/* Address as Subheader */}
                             <div className="flex justify-between items-center mb-4">
                                 <p className="text-lg text-gray-600">
-                                    📍 {event.restaurantData.restaurant?.address || 'N/A'}
+                                    {event.restaurantData.restaurant?.address || 'N/A'}
                                 </p>
                                 {event.restaurantData.restaurant?.address && (
                                     <a
@@ -410,6 +398,21 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                 <div>
                                     <p className="text-sm font-medium text-gray-700">Phone</p>
                                     <p className="text-gray-900">{event.restaurantData.restaurant?.phone || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700">Website</p>
+                                    {event.restaurantData.restaurant?.website ? (
+                                        <a
+                                            href={event.restaurantData.restaurant.website}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 underline"
+                                        >
+                                            Visit Website
+                                        </a>
+                                    ) : (
+                                        <p className="text-gray-900">N/A</p>
+                                    )}
                                 </div>
                                 <div className="md:col-span-2">
                                     <div className="flex justify-between items-start">

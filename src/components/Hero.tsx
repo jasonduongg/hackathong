@@ -17,11 +17,10 @@ export default function Hero() {
                 {/* Tagline */}
                 <div className="mb-8">
                     <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6">
-                        <span className="block">Dilly Dally</span>
+                        <span className="block">Plan Together</span>
                         <span className="block text-soft-orange-600">
-                            Now
+                            Split Automatically
                         </span>
-                        <span className="block">Split Later</span>
                     </h1>
                 </div>
 

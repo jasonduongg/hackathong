@@ -109,7 +109,10 @@ export const PartyList: React.FC<PartyListProps> = ({ onPartySelect, selectedPar
     // Filter parties based on search term
     const filteredParties = parties.filter(party =>
         party.name.toLowerCase().includes(partySearchTerm.toLowerCase())
-    );
+    ).sort((a, b) => {
+        // Sort by creation date, newest first
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
     if (loading) {
         return (

@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
               {
                 "store_name": "Store name",
                 "date": "Date of purchase",
+                "time": "Time of purchase (e.g., '8:00 AM', '2:30 PM')",
                 "total_amount": "Total amount",
                 "items": [
                   {
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
                     raw_response: responseText,
                     store_name: 'N/A',
                     date: 'N/A',
+                    time: 'N/A',
                     total_amount: 'N/A',
                     items: [],
                     tax_amount: 'N/A',
@@ -221,6 +223,7 @@ export async function POST(request: NextRequest) {
                 raw_response: responseText,
                 store_name: 'N/A',
                 date: 'N/A',
+                time: 'N/A',
                 total_amount: 'N/A',
                 items: [],
                 tax_amount: 'N/A',
@@ -230,7 +233,19 @@ export async function POST(request: NextRequest) {
         }
 
         // Store the receipt analysis in Firestore
-        const receiptData = {
+        const receiptData: {
+            partyId: string;
+            fileName: string;
+            fileSize: number;
+            fileType: string;
+            s3Key: string;
+            s3Bucket: string;
+            downloadURL: string;
+            analysis: any;
+            rawResponse: string;
+            uploadedAt: any;
+            displayName: string;
+        } = {
             partyId,
             fileName: file.name,
             fileSize: file.size,
@@ -241,7 +256,63 @@ export async function POST(request: NextRequest) {
             analysis: parsedData,
             rawResponse: responseText,
             uploadedAt: serverTimestamp(),
+            displayName: '', // Will be set below
         };
+
+        // Generate a user-friendly display name for the receipt
+        const generateDisplayName = (storeName: string, date: string, time: string, totalAmount: string): string => {
+            let displayName = '';
+
+            // Start with store name if available
+            if (storeName && storeName !== 'N/A' && storeName.trim() !== '') {
+                displayName = storeName.trim();
+            } else {
+                displayName = 'Receipt';
+            }
+
+            // Add date if available
+            if (date && date !== 'N/A' && date.trim() !== '') {
+                try {
+                    // Try to format the date nicely
+                    const dateObj = new Date(date);
+                    if (!isNaN(dateObj.getTime())) {
+                        const formattedDate = dateObj.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        });
+                        displayName += ` - ${formattedDate}`;
+                    } else {
+                        // If date parsing fails, use the original date string
+                        displayName += ` - ${date.trim()}`;
+                    }
+                } catch (error) {
+                    // If date formatting fails, use the original date string
+                    displayName += ` - ${date.trim()}`;
+                }
+            }
+
+            // Add total amount if available
+            if (totalAmount && totalAmount !== 'N/A' && totalAmount.trim() !== '') {
+                const cleanAmount = totalAmount.replace(/[^0-9.-]/g, '');
+                if (cleanAmount && !isNaN(parseFloat(cleanAmount))) {
+                    const formattedAmount = parseFloat(cleanAmount).toFixed(2);
+                    displayName += ` - $${formattedAmount}`;
+                }
+            }
+
+            return displayName;
+        };
+
+        const displayName = generateDisplayName(
+            parsedData.store_name,
+            parsedData.date,
+            parsedData.time,
+            parsedData.total_amount
+        );
+
+        // Add display name to receipt data
+        receiptData.displayName = displayName;
 
         const docRef = await addDoc(collection(db, 'receipts'), receiptData);
 
@@ -251,7 +322,8 @@ export async function POST(request: NextRequest) {
             raw_response: responseText,
             receiptId: docRef.id,
             downloadURL: uploadResult.url,
-            s3Key: uploadResult.key
+            s3Key: uploadResult.key,
+            displayName: displayName
         });
 
     } catch (error) {

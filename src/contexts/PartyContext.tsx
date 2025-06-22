@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { PartyReceipt } from '@/types/receipt'; // Assuming a shared type definition
 
 interface PartyContextType {
@@ -39,6 +39,13 @@ export const PartyProvider = ({ children, partyId }: { children: ReactNode, part
             setLoading(false);
         }
     }, []);
+
+    // Automatically fetch receipts when the provider initializes
+    useEffect(() => {
+        if (partyId) {
+            fetchReceipts(partyId);
+        }
+    }, [partyId, fetchReceipts]);
 
     const addReceipt = (newReceipt: PartyReceipt) => {
         setReceipts(prev => [newReceipt, ...prev]);

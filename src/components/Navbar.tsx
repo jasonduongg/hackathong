@@ -13,7 +13,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onProfileClick, onHomeClick }) =
     const { user, userProfile } = useAuth();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-
     const handleSignOut = async () => {
         try {
             await signOutUser();
@@ -34,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onProfileClick, onHomeClick }) =
             onHomeClick();
         }
     };
+
 
     const toggleCollapse = () => {
         setIsCollapsed(!isCollapsed);

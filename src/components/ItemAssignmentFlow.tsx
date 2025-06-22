@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowLeft, ArrowRight, Check, Users, DollarSign } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Check, Users, DollarSign, CreditCard } from 'lucide-react';
 import { PartyReceipt, ReceiptItem } from '@/types/receipt';
 import { UserProfile } from '@/lib/users';
 
@@ -25,12 +25,15 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
     onClose,
     onAssignmentComplete
 }) => {
-    const [currentItemIndex, setCurrentItemIndex] = useState(0);
+    const [currentStep, setCurrentStep] = useState(0); // 0 = who paid, 1+ = item assignment
+    const [paidBy, setPaidBy] = useState<string>('');
     const [assignments, setAssignments] = useState<AssignmentState>({});
     const [loading, setLoading] = useState(false);
 
     const items = receipt.analysis.items || [];
+    const currentItemIndex = currentStep - 1; // Adjust for the who paid step
     const currentItem = items[currentItemIndex];
+    const totalSteps = items.length + 1; // +1 for the who paid step
 
     // Prevent background scrolling when modal is open
     useEffect(() => {
@@ -115,21 +118,24 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
     };
 
     const handleNext = () => {
-        if (currentItemIndex < items.length - 1) {
-            setCurrentItemIndex(currentItemIndex + 1);
+        if (currentStep === 0) {
+            // Moving from "who paid" to first item
+            setCurrentStep(1);
+        } else if (currentItemIndex < items.length - 1) {
+            setCurrentStep(currentStep + 1);
         }
     };
 
     const handlePrevious = () => {
-        if (currentItemIndex > 0) {
-            setCurrentItemIndex(currentItemIndex - 1);
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
         }
     };
 
     const handleComplete = async () => {
         setLoading(true);
         try {
-            // Update receipt with assignments
+            // Update receipt with assignments and who paid
             const updatedItems = items.map((item, index) => ({
                 ...item,
                 assignedTo: assignments[index]?.assignedTo || [],
@@ -179,7 +185,8 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
                     items: updatedItems
                 },
                 isAssigned: true,
-                memberAmounts
+                memberAmounts,
+                paidBy: paidBy
             };
 
             // Save to database
@@ -207,6 +214,123 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
     const assignedCount = currentAssignment?.assignedTo.length || 0;
     const amountPerPerson = assignedCount > 0 ? itemTotal / assignedCount : 0;
 
+    // Render "Who Paid" step
+    if (currentStep === 0) {
+        return (
+            <div className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="p-6">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Who Paid?</h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Select who paid for this receipt
+                                </p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="mb-6">
+                            <div className="flex justify-between text-sm text-gray-500 mb-2">
+                                <span>Progress</span>
+                                <span>{Math.round(((currentStep + 1) / totalSteps) * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Who Paid Selection */}
+                        <div className="mb-6">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <div className="flex items-center space-x-3 mb-3">
+                                    <CreditCard className="h-5 w-5 text-blue-600" />
+                                    <h3 className="text-lg font-semibold text-blue-900">Receipt Total</h3>
+                                </div>
+                                <p className="text-2xl font-bold text-blue-900">
+                                    {formatCurrency(receipt.analysis.total_amount)}
+                                </p>
+                                <p className="text-sm text-blue-600 mt-1">
+                                    Select who paid this amount
+                                </p>
+                            </div>
+
+                            <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center">
+                                <Users className="h-4 w-4 mr-2" />
+                                Who paid for this receipt?
+                            </h4>
+                            <div className="space-y-2">
+                                {memberProfiles.map((member) => {
+                                    const isSelected = paidBy === member.uid;
+                                    const displayName = member.displayName || member.email?.split('@')[0] || 'Unknown';
+
+                                    return (
+                                        <button
+                                            key={member.uid}
+                                            onClick={() => setPaidBy(member.uid)}
+                                            className={`w-full p-3 rounded-lg border-2 transition-all ${isSelected
+                                                ? 'border-blue-500 bg-blue-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                                                        <span className="text-white text-sm font-medium">
+                                                            {displayName.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <p className="font-medium text-gray-900">{displayName}</p>
+                                                        <p className="text-sm text-gray-500">{member.email}</p>
+                                                    </div>
+                                                </div>
+                                                {isSelected && (
+                                                    <Check className="h-5 w-5 text-blue-500" />
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Important Note */}
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                            <p className="text-sm text-yellow-800">
+                                <strong>Important:</strong> Only the person who paid can request money from others.
+                                This ensures proper accountability for the payment.
+                            </p>
+                        </div>
+
+                        {/* Navigation */}
+                        <div className="flex justify-end items-center pt-4 border-t">
+                            <button
+                                onClick={handleNext}
+                                disabled={!paidBy}
+                                className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span>Continue to Items</span>
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render item assignment steps
     return (
         <div className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -233,12 +357,12 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
                     <div className="mb-6">
                         <div className="flex justify-between text-sm text-gray-500 mb-2">
                             <span>Progress</span>
-                            <span>{Math.round(((currentItemIndex + 1) / items.length) * 100)}%</span>
+                            <span>{Math.round(((currentStep + 1) / totalSteps) * 100)}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${((currentItemIndex + 1) / items.length) * 100}%` }}
+                                style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
                             />
                         </div>
                     </div>
@@ -389,7 +513,7 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
                     <div className="flex justify-between items-center pt-4 border-t">
                         <button
                             onClick={handlePrevious}
-                            disabled={currentItemIndex === 0}
+                            disabled={currentStep === 1}
                             className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <ArrowLeft className="h-4 w-4" />

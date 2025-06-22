@@ -1,12 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StructuredVideoData, parseStructuredVideoData } from '@/lib/prompts';
+import { EnhancedProgressBar } from '@/components/EnhancedProgressBar';
+
+interface ProgressStep {
+    id: string;
+    title: string;
+    status: 'pending' | 'running' | 'completed' | 'error';
+    percentage: number;
+    details?: string;
+    startTime?: number;
+    endTime?: number;
+    duration?: number;
+}
 
 export default function StructuredVideoTest() {
     const [url, setUrl] = useState<string>('');
     const [loading, setLoading] = useState(false);
-    const [progress, setProgress] = useState<{step: string, percentage: number, details?: string}>({step: '', percentage: 0});
+    const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
+    const [overallPercentage, setOverallPercentage] = useState(0);
     const [result, setResult] = useState<StructuredVideoData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [instagramData, setInstagramData] = useState<{
@@ -19,6 +32,47 @@ export default function StructuredVideoTest() {
         screenshotCount: number;
         videoDuration: number;
     } | null>(null);
+
+    const updateStep = (stepId: string, updates: Partial<ProgressStep>) => {
+        setProgressSteps(prev => prev.map(step => 
+            step.id === stepId ? { ...step, ...updates } : step
+        ));
+    };
+
+    const startStep = (stepId: string) => {
+        updateStep(stepId, { 
+            status: 'running', 
+            startTime: Date.now(),
+            percentage: 0 
+        });
+    };
+
+    const completeStep = (stepId: string, percentage: number = 100, details?: string) => {
+        const step = progressSteps.find(s => s.id === stepId);
+        const endTime = Date.now();
+        const duration = step?.startTime ? endTime - step.startTime : undefined;
+        
+        updateStep(stepId, { 
+            status: 'completed', 
+            percentage,
+            endTime,
+            duration,
+            details 
+        });
+    };
+
+    const errorStep = (stepId: string, errorMessage: string) => {
+        updateStep(stepId, { 
+            status: 'error', 
+            details: errorMessage 
+        });
+    };
+
+    const calculateOverallPercentage = () => {
+        if (progressSteps.length === 0) return 0;
+        const totalPercentage = progressSteps.reduce((sum, step) => sum + step.percentage, 0);
+        return totalPercentage / progressSteps.length;
+    };
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setUrl(e.target.value);
@@ -44,7 +98,25 @@ export default function StructuredVideoTest() {
         setLoading(true);
         setError(null);
         setResult(null);
-        setProgress({step: 'Starting analysis...', percentage: 0});
+        
+        // Initialize progress steps
+        const isInstagram = url.includes('instagram.com/p/');
+        const initialSteps: ProgressStep[] = isInstagram ? [
+            { id: 'init', title: 'Initializing Analysis', status: 'pending', percentage: 0 },
+            { id: 'screenshot', title: 'Taking Instagram Screenshots', status: 'pending', percentage: 0 },
+            { id: 'process', title: 'Processing Screenshots', status: 'pending', percentage: 0 },
+            { id: 'analyze', title: 'AI Analysis', status: 'pending', percentage: 0 },
+            { id: 'validate', title: 'Validating Results', status: 'pending', percentage: 0 },
+            { id: 'complete', title: 'Finalizing', status: 'pending', percentage: 0 }
+        ] : [
+            { id: 'init', title: 'Initializing Analysis', status: 'pending', percentage: 0 },
+            { id: 'analyze', title: 'AI Analysis', status: 'pending', percentage: 0 },
+            { id: 'validate', title: 'Validating Results', status: 'pending', percentage: 0 },
+            { id: 'complete', title: 'Finalizing', status: 'pending', percentage: 0 }
+        ];
+        
+        setProgressSteps(initialSteps);
+        setOverallPercentage(0);
 
         try {
             const formData = new FormData();
@@ -53,18 +125,30 @@ export default function StructuredVideoTest() {
             const isInstagram = url.includes('instagram.com/p/');
             
             if (isInstagram) {
-                setProgress({step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page'});
+                // Step 1: Initialize
+                startStep('init');
+                updateStep('init', { percentage: 50, details: 'Preparing Instagram analysis' });
+                await new Promise(resolve => setTimeout(resolve, 500));
+                completeStep('init', 100, 'Analysis initialized successfully');
                 
-                // Step 1: Get screenshot from backend
+                // Step 2: Take screenshots
+                startStep('screenshot');
+                updateStep('screenshot', { percentage: 20, details: 'Loading Instagram page' });
+                
                 const screenshotRes = await fetch('/api/screenshot-instagram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
                 });
+                
+                updateStep('screenshot', { percentage: 60, details: 'Capturing screenshots' });
+                
                 const screenshotData = await screenshotRes.json();
                 if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
                     throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
                 }
+                
+                updateStep('screenshot', { percentage: 80, details: 'Processing captured images' });
                 
                 // Store Instagram data for display
                 setInstagramData({
@@ -82,15 +166,15 @@ export default function StructuredVideoTest() {
                     ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
                     : ` (${screenshotData.screenshotCount} screenshots)`;
                 
-                setProgress({step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully'});
+                completeStep('screenshot', 100, `Captured ${screenshotData.screenshotCount} screenshots${durationText}`);
                 
-                // Step 2: Send ALL screenshots for analysis
-                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 50, details: 'Preparing screenshots for AI analysis'});
+                // Step 3: Process screenshots
+                startStep('process');
+                updateStep('process', { percentage: 30, details: 'Preparing screenshots for AI analysis' });
                 
                 // Create a combined analysis request with all screenshots
                 const analysisFormData = new FormData();
                 
-                // Add all screenshots
                 screenshotData.screenshots.forEach((screenshot: string, index: number) => {
                     const byteString = atob(screenshot);
                     const ab = new ArrayBuffer(byteString.length);
@@ -102,46 +186,44 @@ export default function StructuredVideoTest() {
                     analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
                 });
                 
+                updateStep('process', { percentage: 60, details: 'Converting images to base64' });
+                
                 analysisFormData.append('promptType', 'structured');
                 analysisFormData.append('provider', 'anthropic');
                 analysisFormData.append('analysisMode', 'multi-screenshot');
                 
-                // Add caption text for better context
                 if (screenshotData.captionText) {
                     analysisFormData.append('captionText', screenshotData.captionText);
-                    console.log('Added caption text for context:', screenshotData.captionText.substring(0, 100) + '...');
                 }
                 
-                // Add all extracted Instagram data
                 if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
                     analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
-                    console.log('Added account mentions:', screenshotData.accountMentions);
                 }
                 
                 if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
                     analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
-                    console.log('Added location tags:', screenshotData.locationTags);
                 }
                 
                 if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
                     analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
-                    console.log('Added hashtags:', screenshotData.hashtags.slice(0, 5));
                 }
                 
-                // Add video duration for context
                 if (screenshotData.videoDuration > 0) {
                     analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
-                    console.log('Added video duration:', screenshotData.videoDuration);
                 }
                 
-                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis'});
+                completeStep('process', 100, 'Screenshots prepared for analysis');
+                
+                // Step 4: AI Analysis
+                startStep('analyze');
+                updateStep('analyze', { percentage: 20, details: 'Sending to Claude for analysis' });
                 
                 const response = await fetch('/api/process-video', {
                     method: 'POST',
                     body: analysisFormData
                 });
 
-                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
+                updateStep('analyze', { percentage: 80, details: 'Processing AI response' });
 
                 const data = await response.json();
                 console.log('API Response:', data);
@@ -150,9 +232,20 @@ export default function StructuredVideoTest() {
                     throw new Error(data.error || 'Failed to process content');
                 }
 
+                completeStep('analyze', 100, 'AI analysis completed');
+                
+                // Step 5: Validate results
+                startStep('validate');
+                updateStep('validate', { percentage: 50, details: 'Validating places and locations' });
+                
                 // Use the enhanced structured data from the API
                 if (data.structuredData) {
-                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
+                    completeStep('validate', 100, 'Results validated successfully');
+                    
+                    // Step 6: Complete
+                    startStep('complete');
+                    updateStep('complete', { percentage: 100, details: 'Results ready' });
+                    
                     // Combine structuredData with other top-level fields
                     setResult({
                         ...data.structuredData,
@@ -162,56 +255,89 @@ export default function StructuredVideoTest() {
                         geocodedPlaces: data.geocodedPlaces,
                         processingInfo: data.processingInfo
                     });
+                    
+                    completeStep('complete', 100, 'Analysis complete!');
                 } else {
+                    errorStep('validate', 'Failed to get structured data from API response');
                     setError('Failed to get structured data from API response');
                 }
             } else {
-                // Regular URL processing
+                // Non-Instagram URL processing
+                startStep('init');
+                updateStep('init', { percentage: 50, details: 'Preparing analysis' });
+                await new Promise(resolve => setTimeout(resolve, 500));
+                completeStep('init', 100, 'Analysis initialized');
+                
                 formData.append('url', url);
                 formData.append('promptType', 'structured');
                 formData.append('provider', 'anthropic');
                 
-                setProgress({step: 'Analyzing content...', percentage: 50, details: 'Processing with Claude'});
-                console.log('Submitting URL:', url);
+                startStep('analyze');
+                updateStep('analyze', { percentage: 30, details: 'Processing with Claude' });
 
                 const response = await fetch('/api/process-video', {
                     method: 'POST',
                     body: formData
                 });
 
-                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
+                updateStep('analyze', { percentage: 80, details: 'Processing response' });
 
                 const data = await response.json();
-                console.log('API Response:', data);
 
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to process content');
                 }
 
-                // Use the enhanced structured data from the API
+                completeStep('analyze', 100, 'AI analysis completed');
+                
+                startStep('validate');
+                updateStep('validate', { percentage: 50, details: 'Validating results' });
+
                 if (data.structuredData) {
-                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
-                    // Combine structuredData with other top-level fields
-                    setResult({
+                    completeStep('validate', 100, 'Results validated');
+                    
+                    startStep('complete');
+                    updateStep('complete', { percentage: 100, details: 'Results ready' });
+                    
+                    const fullResult = {
                         ...data.structuredData,
                         deducedRestaurant: data.deducedRestaurant,
                         restaurantDetails: data.restaurantDetails,
                         enhanced_places: data.enhanced_places,
                         geocodedPlaces: data.geocodedPlaces,
-                        processingInfo: data.processingInfo
-                    });
+                        processingInfo: data.processingInfo,
+                        allDetectedRestaurants: data.allDetectedRestaurants,
+                        hasMultipleRestaurants: data.hasMultipleRestaurants
+                    };
+                    setResult(fullResult);
+                    
+                    completeStep('complete', 100, 'Analysis complete!');
                 } else {
+                    errorStep('validate', 'Failed to get structured data from API response');
                     setError('Failed to get structured data from API response');
                 }
             }
 
-        } catch (error) {
-            console.error('Error:', error);
-            setError(error instanceof Error ? error.message : 'An error occurred');
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+            setError(errorMessage);
+            
+            // Mark current step as error
+            const currentStep = progressSteps.find(step => step.status === 'running');
+            if (currentStep) {
+                errorStep(currentStep.id, errorMessage);
+            }
         } finally {
             setLoading(false);
         }
     };
+
+    // Update overall percentage whenever steps change
+    useEffect(() => {
+        setOverallPercentage(calculateOverallPercentage());
+    }, [progressSteps]);
+
+    const isComplete = progressSteps.length > 0 && progressSteps.every(step => step.status === 'completed');
 
     const extractVideoFrames = async (videoFile: File): Promise<string[]> => {
         return new Promise((resolve, reject) => {
@@ -262,10 +388,12 @@ export default function StructuredVideoTest() {
                     
                     const currentTime = timestamps[frameIndex];
                     const progressPercentage = ((frameIndex + 1) / timestamps.length) * 100;
-                    setProgress({
-                        step: `Extracting frame ${frameIndex + 1}/${timestamps.length}`,
-                        percentage: progressPercentage
-                    });
+                    setProgressSteps(prev => [
+                        ...prev.map(step => 
+                            step.id === 'extract' ? { ...step, percentage: progressPercentage } : step
+                        ),
+                        { id: 'extract', title: 'Extracting Frames', status: 'running', percentage: progressPercentage }
+                    ]);
                     
                     console.log(`Extracting frame ${frameIndex + 1} at time ${currentTime}s`);
                     video.currentTime = currentTime;
@@ -376,24 +504,13 @@ export default function StructuredVideoTest() {
                         </div>
                     )}
 
-                    {loading && progress.step && (
-                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-blue-700 text-sm font-medium">{progress.step}</span>
-                                <span className="text-blue-700 text-sm">{Math.round(progress.percentage)}%</span>
-                            </div>
-                            {progress.details && (
-                                <div className="text-blue-600 text-xs mb-2 italic">
-                                    {progress.details}
-                                </div>
-                            )}
-                            <div className="w-full bg-blue-200 rounded-full h-2">
-                                <div 
-                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${progress.percentage}%` }}
-                                ></div>
-                            </div>
-                        </div>
+                    {loading && progressSteps.length > 0 && (
+                        <EnhancedProgressBar
+                            steps={progressSteps}
+                            overallPercentage={overallPercentage}
+                            isComplete={isComplete}
+                            error={error}
+                        />
                     )}
                 </div>
 
@@ -591,6 +708,21 @@ export default function StructuredVideoTest() {
                                             {/* Restaurant Details */}
                                             {result.restaurantDetails && (
                                                 <div className="mt-3 p-3 bg-white rounded border">
+                                                    {/* Restaurant Image */}
+                                                    {result.restaurantDetails.image && (
+                                                        <div className="mb-3">
+                                                            <img 
+                                                                src={result.restaurantDetails.image} 
+                                                                alt={`${result.restaurantDetails.name} restaurant`}
+                                                                className="w-full h-32 object-cover rounded border"
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    
                                                     {result.restaurantDetails.isChain ? (
                                                         <div className="text-sm">
                                                             <div className="flex items-center gap-2 mb-2">
@@ -755,7 +887,8 @@ export default function StructuredVideoTest() {
                                         hours: result.restaurantDetails.isChain ? null : result.restaurantDetails.hours,
                                         phone: result.restaurantDetails.isChain ? null : result.restaurantDetails.phone,
                                         rating: result.restaurantDetails.isChain ? null : result.restaurantDetails.rating,
-                                        placeId: result.restaurantDetails.isChain ? null : result.restaurantDetails.placeId
+                                        placeId: result.restaurantDetails.isChain ? null : result.restaurantDetails.placeId,
+                                        image: result.restaurantDetails.isChain ? null : result.restaurantDetails.image
                                     } : null,
                                     analysis: {
                                         place_names: result.place_names,

@@ -17,14 +17,6 @@ interface RestaurantInfo {
     googleMapsUrl?: string;
 }
 
-interface LoadingTask {
-    id: string;
-    title: string;
-    description: string;
-    status: 'pending' | 'loading' | 'completed' | 'error';
-    percentage?: number;
-}
-
 interface BeforeFlowTabProps {
     partyId: string;
     onEventSaved?: () => void;
@@ -41,7 +33,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
             error: beforeFlowError,
             instagramData,
             savingEvent,
-            saveStatus
+            saveStatus,
+            loadingTasks
         },
         setUrl: setBeforeFlowUrl,
         setLoading: setBeforeFlowLoading,
@@ -51,6 +44,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         setInstagramData,
         setSavingEvent,
         setSaveStatus,
+        setLoadingTasks,
+        updateLoadingTask,
         clearError
     } = useVideoAnalysis();
 
@@ -60,9 +55,6 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantInfo | null>(null);
-
-    // Loading tasks state
-    const [loadingTasks, setLoadingTasks] = useState<LoadingTask[]>([]);
 
     // Before Flow handlers
     const handleBeforeFlowUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,15 +115,6 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 }
             ]);
         }
-    };
-
-    // Update loading task status
-    const updateLoadingTask = (taskId: string, status: LoadingTask['status'], percentage?: number) => {
-        setLoadingTasks(prev => prev.map(task =>
-            task.id === taskId
-                ? { ...task, status, percentage }
-                : task
-        ));
     };
 
     // Restaurant search handlers

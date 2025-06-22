@@ -19,6 +19,14 @@ interface AnalysisProgress {
     details?: string;
 }
 
+export interface LoadingTask {
+    id: string;
+    title: string;
+    description: string;
+    status: 'pending' | 'loading' | 'completed' | 'error';
+    percentage?: number;
+}
+
 interface VideoAnalysisState {
     // Form state
     url: string;
@@ -35,6 +43,9 @@ interface VideoAnalysisState {
     // Save state
     savingEvent: boolean;
     saveStatus: 'idle' | 'success' | 'error';
+
+    // Loading tasks state
+    loadingTasks: LoadingTask[];
 }
 
 interface VideoAnalysisContextType {
@@ -47,6 +58,8 @@ interface VideoAnalysisContextType {
     setInstagramData: (data: InstagramData | null) => void;
     setSavingEvent: (saving: boolean) => void;
     setSaveStatus: (status: 'idle' | 'success' | 'error') => void;
+    setLoadingTasks: (tasks: LoadingTask[]) => void;
+    updateLoadingTask: (taskId: string, status: LoadingTask['status'], percentage?: number) => void;
     resetState: () => void;
     clearError: () => void;
 }
@@ -59,7 +72,8 @@ const initialState: VideoAnalysisState = {
     error: null,
     instagramData: null,
     savingEvent: false,
-    saveStatus: 'idle'
+    saveStatus: 'idle',
+    loadingTasks: []
 };
 
 const VideoAnalysisContext = createContext<VideoAnalysisContextType | undefined>(undefined);
@@ -99,6 +113,21 @@ export const VideoAnalysisProvider: React.FC<{ children: ReactNode }> = ({ child
         setState(prev => ({ ...prev, saveStatus }));
     };
 
+    const setLoadingTasks = (loadingTasks: LoadingTask[]) => {
+        setState(prev => ({ ...prev, loadingTasks }));
+    };
+
+    const updateLoadingTask = (taskId: string, status: LoadingTask['status'], percentage?: number) => {
+        setState(prev => ({
+            ...prev,
+            loadingTasks: prev.loadingTasks.map(task =>
+                task.id === taskId
+                    ? { ...task, status, percentage }
+                    : task
+            )
+        }));
+    };
+
     const resetState = () => {
         setState(initialState);
     };
@@ -117,6 +146,8 @@ export const VideoAnalysisProvider: React.FC<{ children: ReactNode }> = ({ child
         setInstagramData,
         setSavingEvent,
         setSaveStatus,
+        setLoadingTasks,
+        updateLoadingTask,
         resetState,
         clearError
     };

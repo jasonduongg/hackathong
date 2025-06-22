@@ -85,7 +85,6 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
             }
         } catch (error) {
             console.error('Error fetching member metadata:', error);
-            alert('Error fetching member metadata');
         } finally {
             setLoadingMetadata(false);
         }
@@ -312,59 +311,6 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
             alert('Invalid JSON format. Please check your data.');
         } finally {
             setSavingRestaurantData(false);
-        }
-    };
-
-    const fetchMemberMetadata = async () => {
-        if (!partyId) return;
-
-        try {
-            setLoadingMetadata(true);
-            const response = await fetch(`/api/get-members?partyId=${partyId}`);
-            const data = await response.json();
-
-            if (data.success) {
-                setMemberMetadata(data);
-                
-                // Now call the get-times API to find common availability times
-                await fetchCommonTimes(data.memberProfiles);
-            } else {
-                console.error('Failed to fetch member metadata:', data.error);
-                alert('Failed to fetch member metadata');
-            }
-        } catch (error) {
-            console.error('Error fetching member metadata:', error);
-        } finally {
-            setLoadingMetadata(false);
-        }
-    };
-
-    const fetchCommonTimes = async (memberProfiles: any[]) => {
-        if (!memberProfiles || memberProfiles.length === 0) return;
-
-        try {
-            setLoadingCommonTimes(true);
-            const response = await fetch('/api/get-times', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    memberProfiles: memberProfiles
-                })
-            });
-            
-            const data = await response.json();
-
-            if (data.success) {
-                setCommonTimes(data);
-            } else {
-                console.error('Failed to fetch common times:', data.error);
-            }
-        } catch (error) {
-            console.error('Error fetching common times:', error);
-        } finally {
-            setLoadingCommonTimes(false);
         }
     };
 

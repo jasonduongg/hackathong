@@ -423,8 +423,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                         <div
                                             key={index}
                                             className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
-                                                    ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
-                                                    : 'bg-white border-orange-200 hover:bg-orange-50'
+                                                ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
+                                                : 'bg-white border-orange-200 hover:bg-orange-50'
                                                 }`}
                                             onClick={() => handleSelectSearchResult(restaurant)}
                                         >

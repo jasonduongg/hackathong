@@ -22,8 +22,6 @@ import { VideoAnalysisProvider, useVideoAnalysis } from '@/contexts/VideoAnalysi
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
-import ChainLocationFinder from './ChainLocationFinder';
-import ChooseRestaurant from './ChooseRestaurant';
 import Availability from './Availability';
 
 interface SinglePartyProps {
@@ -40,7 +38,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'choose-restaurant' | 'upload' | 'receipts' | 'availability' | 'requests';
+type TabType = 'info' | 'upload' | 'receipts' | 'availability' | 'requests' | 'before-flow' | 'events';
 
 // Component to show Before Flow tab button with loading indicator
 const BeforeFlowTabButton: React.FC<{
@@ -94,8 +92,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [memberMetadata, setMemberMetadata] = useState<any>(null);
     const [showMemberMetadata, setShowMemberMetadata] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
-    const [showChainLocationFinder, setShowChainLocationFinder] = useState(false);
-    const [chainLocationData, setChainLocationData] = useState<any>(null);
     const [commonTimes, setCommonTimes] = useState<any>(null);
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
     const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
@@ -111,7 +107,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
 
             if (data.success) {
                 setMemberMetadata(data);
-                
+
                 // Now call the get-times API to find common availability times
                 await fetchCommonTimes(data.memberProfiles);
             } else {
@@ -139,7 +135,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     memberProfiles: memberProfiles
                 })
             });
-            
+
             const data = await response.json();
 
             if (data.success) {
@@ -348,15 +344,15 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
 
         try {
             setSavingRestaurantData(true);
-            
+
             // Validate JSON
             const parsedData = JSON.parse(restaurantData);
-            
+
             // Save the data to the saved state
             setSavedRestaurantData(restaurantData);
-            
+
             alert('Restaurant data saved!');
-            
+
         } catch (error) {
             console.error('Error with restaurant data:', error);
             alert('Invalid JSON format. Please check your data.');
@@ -370,17 +366,13 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         setActiveTab('availability');
     };
 
-    const handleChainLocationFound = (data: any) => {
-        setChainLocationData(data);
-        console.log('Chain location found:', data);
-        // You can add additional logic here, like saving to database or showing notifications
-    };
-
     const handleConfirmSelection = (restaurant: any, selectedTimeSlot: any) => {
         console.log('Final selection confirmed:', { restaurant, selectedTimeSlot });
         // Here you can save the final selection to the database
         // and potentially navigate to a confirmation page or show a success message
         alert(`Party confirmed! ${restaurant.name} on ${selectedTimeSlot.day} at ${selectedTimeSlot.hour}`);
+    };
+
     const handleEventSaved = () => {
         setEventsRefreshKey(prev => prev + 1);
     };
@@ -680,15 +672,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         </div>
                     </div>
                 );
-            case 'choose-restaurant':
-                return (
-                    <ChooseRestaurant
-                        partyId={partyId}
-                        onRestaurantSelected={handleRestaurantSelected}
-                        onChainLocationFound={handleChainLocationFound}
-                        selectedRestaurant={selectedRestaurant}
-                    />
-                );
             case 'upload':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -728,34 +711,25 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                            }`}
                     >
                         Party Info
                     </button>
                     <button
-                        onClick={() => setActiveTab('choose-restaurant')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'choose-restaurant'
+                        onClick={() => setActiveTab('availability')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'availability'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                            }`}
                     >
-                        Choose Restaurant
+                        Availability
                     </button>
-                        <button
-                            onClick={() => setActiveTab('availability')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'availability'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            Availability
-                        </button>
                     <button
                         onClick={() => setActiveTab('upload')}
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                            }`}
                     >
                         Upload Receipt
                     </button>
@@ -764,7 +738,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center space-x-2">
                             <span>Receipts</span>
@@ -780,7 +754,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'requests'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center space-x-2">
                             <span>Requests</span>
@@ -930,52 +904,52 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                         </div>
                                     </div>
 
-                                        {/* Common Times Section */}
-                                        {loadingCommonTimes ? (
-                                            <div className="bg-yellow-50 rounded-lg p-4">
-                                                <h4 className="text-md font-medium text-yellow-900 mb-2">Common Availability Times</h4>
-                                                <div className="text-center py-4">
-                                                    <div className="text-lg text-yellow-700">Finding common times...</div>
+                                    {/* Common Times Section */}
+                                    {loadingCommonTimes ? (
+                                        <div className="bg-yellow-50 rounded-lg p-4">
+                                            <h4 className="text-md font-medium text-yellow-900 mb-2">Common Availability Times</h4>
+                                            <div className="text-center py-4">
+                                                <div className="text-lg text-yellow-700">Finding common times...</div>
+                                            </div>
+                                        </div>
+                                    ) : commonTimes ? (
+                                        <div className="bg-green-50 rounded-lg p-4">
+                                            <h4 className="text-md font-medium text-green-900 mb-2">Common Availability Times</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
+                                                <div>
+                                                    <span className="font-medium text-green-800">Total Available Hours:</span> {commonTimes.totalAvailableHours}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-green-800">Days with Common Times:</span> {commonTimes.commonTimes.length}
                                                 </div>
                                             </div>
-                                        ) : commonTimes ? (
-                                            <div className="bg-green-50 rounded-lg p-4">
-                                                <h4 className="text-md font-medium text-green-900 mb-2">Common Availability Times</h4>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
-                                                    <div>
-                                                        <span className="font-medium text-green-800">Total Available Hours:</span> {commonTimes.totalAvailableHours}
-                                                    </div>
-                                                    <div>
-                                                        <span className="font-medium text-green-800">Days with Common Times:</span> {commonTimes.commonTimes.length}
-                                                    </div>
-                                                </div>
-                                                
-                                                {commonTimes.commonTimes.length > 0 ? (
-                                                    <div className="space-y-3">
-                                                        {commonTimes.commonTimes.map((day: any, index: number) => (
-                                                            <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
-                                                                <div className="flex justify-between items-center mb-2">
-                                                                    <h5 className="font-medium text-green-800 capitalize">{day.day}</h5>
-                                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                                                        {day.hourCount} hours
-                                                                    </span>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    {day.timeRanges.map((range: string, rangeIndex: number) => (
-                                                                        <div key={rangeIndex} className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
-                                                                            {range}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
+
+                                            {commonTimes.commonTimes.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {commonTimes.commonTimes.map((day: any, index: number) => (
+                                                        <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <h5 className="font-medium text-green-800 capitalize">{day.day}</h5>
+                                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                                    {day.hourCount} hours
+                                                                </span>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-center py-4">
-                                                        <div className="text-lg text-green-700">No common times found</div>
-                                                        <div className="text-sm text-green-600 mt-1">All members need to be available at the same time</div>
-                                                    </div>
-                                                )}
+                                                            <div className="space-y-1">
+                                                                {day.timeRanges.map((range: string, rangeIndex: number) => (
+                                                                    <div key={rangeIndex} className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
+                                                                        {range}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4">
+                                                    <div className="text-lg text-green-700">No common times found</div>
+                                                    <div className="text-sm text-green-600 mt-1">All members need to be available at the same time</div>
+                                                </div>
+                                            )}
 
                                             {/* Aggregated Preferences */}
                                             {commonTimes.aggregatedPreferences && (
@@ -1033,7 +1007,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                                             <p className="text-sm text-gray-500">{member.email}</p>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                                                         <div>
                                                             <span className="font-medium text-gray-700">Job:</span> {member.job || 'Not specified'}

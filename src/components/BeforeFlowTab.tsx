@@ -1,8 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoAnalysis } from '@/contexts/VideoAnalysisContext';
+
+interface RestaurantInfo {
+    name: string;
+    address: string;
+    isChain?: boolean;
+    chainName?: string;
+    rating?: number;
+    phone?: string;
+    website?: string;
+    hours?: string[];
+    distanceFromParty?: number;
+    googleMapsUrl?: string;
+}
 
 interface BeforeFlowTabProps {
     partyId: string;
@@ -33,10 +46,61 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         clearError
     } = useVideoAnalysis();
 
+    // Restaurant search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<RestaurantInfo[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantInfo | null>(null);
+
     // Before Flow handlers
     const handleBeforeFlowUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setBeforeFlowUrl(e.target.value);
         clearError();
+    };
+
+    // Restaurant search handlers
+    const handleSearch = async () => {
+        if (!searchQuery.trim()) {
+            setSearchError('Please enter a restaurant name');
+            return;
+        }
+
+        setIsSearching(true);
+        setSearchError(null);
+        setSearchResults([]);
+
+        try {
+            const response = await fetch('/api/search-restaurant', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    partyId,
+                    restaurantName: searchQuery.trim()
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setSearchResults(data.data.allLocations);
+                console.log('Search results:', data.data.allLocations);
+            } else {
+                setSearchError(data.error || 'Failed to search for restaurant');
+                console.error('Search error:', data);
+            }
+        } catch (error) {
+            console.error('Error searching restaurant:', error);
+            setSearchError('Failed to search for restaurant. Please try again.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleSelectSearchResult = (restaurant: RestaurantInfo) => {
+        setSelectedRestaurant(restaurant);
     };
 
     const handleBeforeFlowSubmit = async (e: React.FormEvent) => {
@@ -103,60 +167,28 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
                 // Create a combined analysis request with all screenshots
                 const analysisFormData = new FormData();
-
-                // Add all screenshots
-                for (let i = 0; i < screenshotData.screenshots.length; i++) {
-                    const screenshot = screenshotData.screenshots[i];
-                    const byteString = atob(screenshot);
-                    const ab = new ArrayBuffer(byteString.length);
-                    const ia = new Uint8Array(ab);
-                    for (let j = 0; j < byteString.length; j++) {
-                        ia[j] = byteString.charCodeAt(j);
-                    }
-                    const blob = new Blob([ab], { type: 'image/png' });
-                    analysisFormData.append('images', blob, `instagram-screenshot-${i + 1}.png`);
-                }
-
                 analysisFormData.append('promptType', 'structured');
                 analysisFormData.append('provider', 'anthropic');
-                analysisFormData.append('analysisMode', 'multi-screenshot');
 
-                // Add Instagram-specific context
-                if (screenshotData.captionText) {
-                    analysisFormData.append('captionText', screenshotData.captionText);
-                    console.log('Added caption text for context:', screenshotData.captionText.substring(0, 100) + '...');
-                }
-                if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
-                    analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
-                    console.log('Added account mentions:', screenshotData.accountMentions);
-                }
-                if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
-                    analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
-                    console.log('Added location tags:', screenshotData.locationTags);
-                }
-                if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
-                    analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
-                    console.log('Added hashtags:', screenshotData.hashtags.slice(0, 5));
-                }
-                if (screenshotData.videoDuration > 0) {
-                    analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
-                    console.log('Added video duration:', screenshotData.videoDuration);
-                }
+                // Add all screenshots to the form data
+                screenshotData.screenshots.forEach((screenshot: string, index: number) => {
+                    analysisFormData.append('screenshots', screenshot);
+                });
 
-                setBeforeFlowProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis' });
+                setBeforeFlowProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 60, details: 'Sending to AI for analysis' });
 
-                const response = await fetch('/api/process-video', {
+                const analysisResponse = await fetch('/api/process-screenshots', {
                     method: 'POST',
                     body: analysisFormData
                 });
 
                 setBeforeFlowProgress({ step: 'Processing results...', percentage: 90, details: 'Validating places and locations' });
 
-                const data = await response.json();
-                console.log('API Response:', data);
+                const data = await analysisResponse.json();
+                console.log('Analysis Response:', data);
 
-                if (!response.ok) {
-                    throw new Error(data.error || 'Failed to process content');
+                if (!analysisResponse.ok) {
+                    throw new Error(data.error || 'Failed to analyze screenshots');
                 }
 
                 // Use the enhanced structured data from the API
@@ -338,6 +370,144 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 </div>
             </div>
 
+            {/* Restaurant Search Section */}
+            <div className="mb-8">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+                    <div className="flex items-center mb-4">
+                        <div className="flex-shrink-0">
+                            <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-lg font-medium text-orange-900">Search Restaurant</h3>
+                            <p className="text-sm text-orange-700">Find a specific restaurant near your party</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex space-x-2">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                placeholder="Enter restaurant name (e.g., 'McDonald's', 'Pizza Hut')"
+                                className="flex-1 px-3 py-2 text-sm border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                disabled={isSearching}
+                            />
+                            <button
+                                onClick={handleSearch}
+                                disabled={isSearching || !searchQuery.trim()}
+                                className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSearching ? 'Searching...' : 'Search'}
+                            </button>
+                        </div>
+
+                        {searchError && (
+                            <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-3">
+                                {searchError}
+                            </div>
+                        )}
+
+                        {searchResults.length > 0 && (
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-orange-800">Search Results ({searchResults.length} found)</h4>
+                                {searchResults.map((restaurant, index) => {
+                                    const isSelected = selectedRestaurant &&
+                                        selectedRestaurant.name === restaurant.name &&
+                                        selectedRestaurant.address === restaurant.address;
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
+                                                    ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
+                                                    : 'bg-white border-orange-200 hover:bg-orange-50'
+                                                }`}
+                                            onClick={() => handleSelectSearchResult(restaurant)}
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
+                                                        {isSelected && (
+                                                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                                Selected
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600">{restaurant.address}</p>
+                                                    <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                                        {restaurant.rating && (
+                                                            <span>⭐ {restaurant.rating}/5</span>
+                                                        )}
+                                                        {restaurant.distanceFromParty && (
+                                                            <span>📍 {restaurant.distanceFromParty.toFixed(1)} km away</span>
+                                                        )}
+                                                        {restaurant.isChain && (
+                                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                                Chain
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <button className={`${isSelected ? 'text-green-600' : 'text-orange-600 hover:text-orange-800'
+                                                    }`}>
+                                                    {isSelected ? (
+                                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Selected Restaurant Display */}
+                        {selectedRestaurant && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center mb-2">
+                                            <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
+                                        </div>
+                                        <div className="text-sm text-green-800">
+                                            <p className="font-semibold text-base">{selectedRestaurant.name}</p>
+                                            <p className="text-green-700">{selectedRestaurant.address}</p>
+                                            {selectedRestaurant.rating && (
+                                                <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
+                                            )}
+                                            {selectedRestaurant.distanceFromParty && (
+                                                <p className="text-green-600">
+                                                    Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
+                                                </p>
+                                            )}
+                                            {selectedRestaurant.isChain && (
+                                                <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
+                                                    Chain Restaurant
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             {/* Simple Form */}
             <form onSubmit={handleBeforeFlowSubmit} className="space-y-6 mb-8">
                 <div>
@@ -452,17 +622,6 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                             <p className="text-sm text-gray-700">{beforeFlowResult.restaurantDetails.address}</p>
                                         </div>
                                     )}
-                                    {beforeFlowResult.restaurantDetails.phone && (
-                                        <div className="flex items-center space-x-2 mb-2">
-                                            <span className="text-gray-500">📞</span>
-                                            <a
-                                                href={`tel:${beforeFlowResult.restaurantDetails.phone}`}
-                                                className="text-sm text-blue-600 hover:text-blue-800"
-                                            >
-                                                {beforeFlowResult.restaurantDetails.phone}
-                                            </a>
-                                        </div>
-                                    )}
                                     {beforeFlowResult.restaurantDetails.website && (
                                         <div className="flex items-center space-x-2 mb-2">
                                             <span className="text-gray-500">🌐</span>
@@ -470,9 +629,20 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                                 href={beforeFlowResult.restaurantDetails.website}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-sm text-blue-600 hover:text-blue-800"
+                                                className="text-sm text-blue-600 hover:text-blue-800 underline"
                                             >
                                                 Visit Website
+                                            </a>
+                                        </div>
+                                    )}
+                                    {beforeFlowResult.restaurantDetails.phone && (
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <span className="text-gray-500">📞</span>
+                                            <a
+                                                href={`tel:${beforeFlowResult.restaurantDetails.phone}`}
+                                                className="text-sm text-gray-700 hover:text-gray-900"
+                                            >
+                                                {beforeFlowResult.restaurantDetails.phone}
                                             </a>
                                         </div>
                                     )}
@@ -488,29 +658,26 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                     )}
                                     {beforeFlowResult.restaurantDetails.hours && beforeFlowResult.restaurantDetails.hours.length > 0 && (
                                         <div className="mb-2">
-                                            <div className="flex items-start space-x-2">
-                                                <span className="text-gray-500 mt-0.5">🕒</span>
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-700 mb-1">Hours:</p>
-                                                    <div className="text-xs text-gray-600 space-y-1">
-                                                        {beforeFlowResult.restaurantDetails.hours.slice(0, 3).map((hour: string, index: number) => (
-                                                            <div key={index}>{hour}</div>
-                                                        ))}
-                                                        {beforeFlowResult.restaurantDetails.hours.length > 3 && (
-                                                            <div className="text-blue-600 cursor-pointer">
-                                                                +{beforeFlowResult.restaurantDetails.hours.length - 3} more days
-                                                            </div>
-                                                        )}
+                                            <span className="text-gray-500 text-sm">🕒 Hours:</span>
+                                            <div className="mt-1 space-y-1">
+                                                {beforeFlowResult.restaurantDetails.hours.slice(0, 3).map((hour: string, index: number) => (
+                                                    <div key={index} className="text-xs text-gray-600">
+                                                        {hour}
                                                     </div>
-                                                </div>
+                                                ))}
+                                                {beforeFlowResult.restaurantDetails.hours.length > 3 && (
+                                                    <div className="text-xs text-gray-500">
+                                                        +{beforeFlowResult.restaurantDetails.hours.length - 3} more days
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
-                                    {beforeFlowResult.restaurantDetails.placeId && (
+                                    {beforeFlowResult.restaurantDetails.isChain && (
                                         <div className="flex items-center space-x-2">
-                                            <span className="text-gray-500">🆔</span>
-                                            <span className="text-xs text-gray-500">
-                                                Google Place ID: {beforeFlowResult.restaurantDetails.placeId}
+                                            <span className="text-gray-500">🏢</span>
+                                            <span className="text-sm text-gray-700">
+                                                Chain: {beforeFlowResult.restaurantDetails.chainName}
                                             </span>
                                         </div>
                                     )}
@@ -519,9 +686,9 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                         </div>
                     )}
 
-                    {/* Analysis Summary */}
+                    {/* Analysis Results */}
                     <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <h4 className="font-medium text-green-900 mb-4">Analysis Summary</h4>
+                        <h4 className="font-medium text-green-900 mb-4">Content Analysis</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <h5 className="text-sm font-medium text-green-800 mb-2">📍 Places Identified</h5>
@@ -680,43 +847,16 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
                         {/* Status Messages */}
                         {saveStatus === 'success' && (
-                            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                                <div className="flex items-center">
-                                    <svg className="h-5 w-5 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                    <p className="text-green-700 font-medium">Event saved successfully!</p>
-                                </div>
-                                <p className="text-green-600 text-sm mt-1">
-                                    Restaurant data (including Google Maps image), analysis results, and Instagram post have been saved to the events database.
-                                </p>
+                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                                <p className="text-green-700 text-sm">✅ Event saved successfully!</p>
                             </div>
                         )}
 
                         {saveStatus === 'error' && (
-                            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                                <div className="flex items-center">
-                                    <svg className="h-5 w-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                    </svg>
-                                    <p className="text-red-700 font-medium">Error saving event</p>
-                                </div>
-                                <p className="text-red-600 text-sm mt-1">
-                                    Please try again later. If the problem persists, contact support.
-                                </p>
+                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <p className="text-red-700 text-sm">❌ Failed to save event. Please try again.</p>
                             </div>
                         )}
-
-                        <div className="mt-3 text-xs text-gray-500">
-                            <p>This will save:</p>
-                            <ul className="list-disc list-inside mt-1 space-y-1">
-                                <li>Clean restaurant data (name, address, hours, rating, Google Maps image, etc.)</li>
-                                <li>Analysis results (foods shown, tags, context clues)</li>
-                                <li>Instagram post metadata (captions, hashtags, account mentions)</li>
-                                <li>Party association and user information</li>
-                                <li><em>Note: Instagram screenshots are not saved to avoid size limits</em></li>
-                            </ul>
-                        </div>
                     </div>
                 </div>
             )}

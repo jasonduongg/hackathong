@@ -297,10 +297,12 @@ const HeroHeader = () => {
 const Logo = ({ className }: { className?: string }) => {
     return (
         <div className={cn('flex items-center space-x-2', className)}>
-            <div className="w-8 h-8 bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">T</span>
-            </div>
-            <span className="font-bold text-xl text-gray-900 dark:text-white">TripSplit</span>
+            <img
+                src="/assets/hacklogo_transparent.png"
+                alt="Triply Logo"
+                className="h-8 w-auto"
+            />
+            <span className="font-bold text-xl text-gray-900 dark:text-white">Triply</span>
         </div>
     )
 } 

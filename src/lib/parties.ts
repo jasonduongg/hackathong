@@ -111,11 +111,16 @@ export const removeMemberFromParty = async (partyId: string, userId: string): Pr
 
 // Create invitation
 export const createInvitation = async (invitationData: Omit<Invitation, 'id' | 'createdAt'>): Promise<string> => {
+    console.log('Debug - createInvitation called with:', invitationData);
+    console.log('Debug - partyId value:', invitationData.partyId);
+
     const invitationRef = collection(db, 'invitations');
     const newInvitation = {
         ...invitationData,
         createdAt: new Date(),
     };
+
+    console.log('Debug - newInvitation object:', newInvitation);
 
     const docRef = await addDoc(invitationRef, newInvitation);
     return docRef.id;

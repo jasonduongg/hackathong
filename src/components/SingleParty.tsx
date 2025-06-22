@@ -114,49 +114,49 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
     // Function to check if a time slot is already scheduled
     const isTimeSlotScheduled = (day: string, hour: number) => {
         if (!upcomingEvents || upcomingEvents.length === 0) return false;
-        
+
         return upcomingEvents.some(event => {
             if (!event.scheduledTime) return false;
-            
+
             // Check if the event is scheduled for this exact day
             if (event.scheduledTime.day !== day) return false;
-            
+
             // Parse start and end times
             const startTime = event.scheduledTime.startTime;
             const endTime = event.scheduledTime.endTime;
-            
+
             if (!startTime) return false;
-            
+
             // Convert time strings to hours (e.g., "1:00 PM" -> 13, "1:00 AM" -> 1)
             const parseTimeToHour = (timeStr: string) => {
                 const time = timeStr.toLowerCase();
                 const isPM = time.includes('pm');
                 const timeMatch = time.match(/(\d+):(\d+)/);
-                
+
                 if (!timeMatch) return 0;
-                
+
                 let hour = parseInt(timeMatch[1]);
                 if (isPM && hour !== 12) hour += 12;
                 if (!isPM && hour === 12) hour = 0;
-                
+
                 return hour;
             };
-            
+
             const eventStartHour = parseTimeToHour(startTime);
             const eventEndHour = endTime ? parseTimeToHour(endTime) : eventStartHour + 1;
-            
+
             // Debug logging (only for development)
             if (process.env.NODE_ENV === 'development') {
                 console.log(`Checking event: ${event.restaurantData?.restaurant?.name || 'Unknown'} on ${day} from ${startTime} to ${endTime} (${eventStartHour}-${eventEndHour}) vs current hour ${hour}`);
             }
-            
+
             // Check if the current hour falls within the event's time range
             const isScheduled = hour >= eventStartHour && hour < eventEndHour;
-            
+
             if (isScheduled && process.env.NODE_ENV === 'development') {
                 console.log(`Time slot ${day} ${hour}:00 is scheduled for ${event.restaurantData?.restaurant?.name || 'Unknown'}`);
             }
-            
+
             return isScheduled;
         });
     };
@@ -297,7 +297,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
-                    const partyData = docSnap.data() as PartyDetails;
+                    const partyData = { id: docSnap.id, ...docSnap.data() } as PartyDetails;
                     setParty(partyData);
 
                     // Fetch member profiles
@@ -380,7 +380,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
             const timeoutId = setTimeout(() => {
                 fetchCommonTimes(memberMetadata.memberProfiles);
             }, 200);
-            
+
             return () => clearTimeout(timeoutId);
         }
     }, [upcomingEvents?.length]); // Only depend on the length, not the entire array
@@ -429,6 +429,10 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
 
     const handleInviteUser = async (userData: any) => {
         if (!user || !party) return;
+
+        console.log('Debug - party object:', party);
+        console.log('Debug - party.id:', party.id);
+        console.log('Debug - partyId prop:', partyId);
 
         try {
             // Check if party would exceed 4 people limit
@@ -515,7 +519,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
         // Refresh upcoming events to update the availability grid
         fetchUpcomingEvents();
         fetchEventsCount();
-        
+
         // Refresh common times to update availability calculations
         if (memberMetadata && memberMetadata.memberProfiles) {
             fetchCommonTimes(memberMetadata.memberProfiles);
@@ -919,7 +923,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                                             <div
                                                                 key={hour}
                                                                 className={`w-8 h-6 border border-white ${finalColorClass} flex items-center justify-center relative ${isScheduled ? 'border-gray-400 border-2' : ''}`}
-                                                                title={isScheduled 
+                                                                title={isScheduled
                                                                     ? `Scheduled event at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`
                                                                     : `${availableCount}/${totalMembers} available at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`
                                                                 }

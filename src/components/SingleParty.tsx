@@ -18,6 +18,7 @@ import { PartyProvider } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
+import { NearestRestaurantFinder } from './NearestRestaurantFinder';
 
 interface SinglePartyProps {
     partyId: string;
@@ -54,6 +55,8 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [memberMetadata, setMemberMetadata] = useState<any>(null);
     const [showMemberMetadata, setShowMemberMetadata] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
+    const [showRestaurantFinder, setShowRestaurantFinder] = useState(false);
+    const [restaurantFinderData, setRestaurantFinderData] = useState<any>(null);
 
     useEffect(() => {
         const fetchPartyDetails = async () => {
@@ -224,25 +227,42 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     };
 
     const fetchMemberMetadata = async () => {
-        if (!partyId) return;
-
+        setLoadingMetadata(true);
         try {
-            setLoadingMetadata(true);
-            const response = await fetch(`/api/get-same-times?partyId=${partyId}`);
-            const data = await response.json();
-
-            if (data.success) {
-                setMemberMetadata(data);
-            } else {
-                console.error('Failed to fetch member metadata:', data.error);
-                alert('Failed to fetch member metadata');
-            }
+            // Create metadata with party information and member profiles
+            const metadata = {
+                party: {
+                    name: party?.name || 'Unknown Party',
+                    description: party?.description || 'No description available',
+                    createdBy: party?.createdBy || 'Unknown',
+                    memberCount: memberProfiles.length
+                },
+                memberProfiles: memberProfiles.map(profile => ({
+                    uid: profile.uid,
+                    displayName: profile.displayName,
+                    email: profile.email,
+                    address: profile.address,
+                    job: profile.job,
+                    location: profile.location,
+                    bio: profile.bio,
+                    dietaryRestrictions: profile.dietaryRestrictions || [],
+                    foodPreferences: profile.foodPreferences || [],
+                    activityPreferences: profile.activityPreferences || [],
+                    availability: profile.availability || {}
+                }))
+            };
+            setMemberMetadata(metadata);
         } catch (error) {
             console.error('Error fetching member metadata:', error);
-            alert('Error fetching member metadata');
         } finally {
             setLoadingMetadata(false);
         }
+    };
+
+    const handleRestaurantFound = (data: any) => {
+        setRestaurantFinderData(data);
+        console.log('Restaurant found:', data);
+        // You can add additional logic here, like saving to database or showing notifications
     };
 
     if (loading) {
@@ -261,6 +281,12 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-semibold text-gray-900">Party Information</h2>
                             <div className="flex space-x-2">
+                                <button
+                                    onClick={() => setShowRestaurantFinder(!showRestaurantFinder)}
+                                    className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700"
+                                >
+                                    {showRestaurantFinder ? 'Hide Restaurant Finder' : 'Find Restaurant'}
+                                </button>
                                 <button
                                     onClick={() => {
                                         setShowRestaurantData(true);
@@ -342,6 +368,34 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                 )}
                             </div>
                         </div>
+
+                        {/* Restaurant Finder */}
+                        {showRestaurantFinder && (
+                            <div className="mb-6">
+                                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                                    <div className="flex">
+                                        <div className="flex-shrink-0">
+                                            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="ml-3">
+                                            <h3 className="text-sm font-medium text-blue-800">Restaurant Finder</h3>
+                                            <div className="mt-2 text-sm text-blue-700">
+                                                <p>This feature finds the best restaurant location based on party member addresses.</p>
+                                                <p className="mt-1">
+                                                    <strong>Tip:</strong> Make sure all party members have completed their profile with their address information for the best results.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <NearestRestaurantFinder
+                                    partyId={partyId}
+                                    onRestaurantFound={handleRestaurantFound}
+                                />
+                            </div>
+                        )}
 
                         {/* Pending Invitations Bar */}
                         {pendingInvitations.length > 0 && (
@@ -642,16 +696,16 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                             <h4 className="text-md font-medium text-blue-900 mb-2">Party Information</h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Name:</span> {memberMetadata.party.name}
+                                                    <span className="font-medium text-blue-800">Name:</span> {memberMetadata?.party?.name || 'Unknown'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Description:</span> {memberMetadata.party.description}
+                                                    <span className="font-medium text-blue-800">Description:</span> {memberMetadata?.party?.description || 'No description'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Created By:</span> {memberMetadata.party.createdBy}
+                                                    <span className="font-medium text-blue-800">Created By:</span> {memberMetadata?.party?.createdBy || 'Unknown'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Member Count:</span> {memberMetadata.memberCount}
+                                                    <span className="font-medium text-blue-800">Member Count:</span> {memberMetadata?.party?.memberCount || 0}
                                                 </div>
                                             </div>
                                         </div>
@@ -660,7 +714,7 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                         <div>
                                             <h4 className="text-md font-medium text-gray-900 mb-3">Member Profiles</h4>
                                             <div className="space-y-4">
-                                                {memberMetadata.memberProfiles.map((member: any, index: number) => (
+                                                {memberMetadata?.memberProfiles?.map((member: any, index: number) => (
                                                     <div key={member.uid} className="bg-gray-50 rounded-lg p-4">
                                                         <div className="flex items-center space-x-3 mb-3">
                                                             <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-medium">

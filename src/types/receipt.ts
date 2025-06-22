@@ -29,6 +29,7 @@ export interface ReceiptData {
     gratuity?: string;
     gratuity_rate?: string;
     subtotal: string;
+    tax_rate?: string;
 }
 
 export interface PartyReceipt {

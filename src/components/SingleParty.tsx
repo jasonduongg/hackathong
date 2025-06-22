@@ -415,13 +415,8 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     return (
         <PartyProvider partyId={partyId}>
             <div className="container mx-auto p-4 md:p-6 lg:p-8 h-full">
-                <div className="border-b border-gray-200 pb-4">
-                    <h1 className="text-3xl font-bold text-gray-900">{party.name}</h1>
-                    <p className="mt-1 text-sm text-gray-600">{party.description}</p>
-                </div>
-
                 {/* Tab Navigation */}
-                <div className="mt-8 border-b border-gray-200">
+                <div className="border-b border-gray-200">
                     <nav className="-mb-px flex space-x-8">
                         <button
                             onClick={() => setActiveTab('info')}

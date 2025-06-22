@@ -221,7 +221,7 @@ export const PartyView: React.FC = () => {
     }
 
     return (
-        <div className="flex min-h-[calc(125vh)]">
+        <div className="flex">
             {/* Left side - Party List (1/4) */}
             <div className="w-1/4 bg-gray-50 p-4 overflow-y-auto">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">My Parties</h2>

@@ -104,6 +104,12 @@ export async function POST(request: NextRequest) {
               
               IMPORTANT: Only extract information that is clearly visible and readable on the receipt. Do not guess, estimate, or hallucinate any values. If information is unclear, blurry, or not visible, mark it as "N/A".
               
+              MULTIPLE RECEIPT IMAGES:
+              - If the image contains multiple receipts (e.g., an itemized receipt and a credit card slip), you MUST consolidate the information into a single, final JSON object.
+              - Prioritize the itemized receipt for the list of items, subtotal, and tax.
+              - Use the credit card slip (merchant copy) to find the final \`total_amount\` and the \`gratuity\` (tip), as it often includes the tip which is missing from the initial bill.
+              - Ensure the final JSON is mathematically consistent as per the rules above. For example, \`subtotal\` + \`tax\` + \`gratuity\` should equal the final \`total_amount\`.
+
               PRICE READING ACCURACY (CRITICAL):
               - Carefully examine each price digit by digit, especially for expensive items
               - Large amounts (thousands of dollars) are valid and should be read exactly as shown
@@ -113,12 +119,14 @@ export async function POST(request: NextRequest) {
               
               ITEM EXTRACTION RULES:
               1.  **Line Item:** Each line with a price is a distinct item. Extract it as is.
-              2.  **Quantity and Price:** For a line like "2 Cheeseburger ... 7.70", the quantity is "2" and the price is "7.70". You MUST extract the total line price (7.70), not the per-unit price. The backend will calculate the per-unit price.
+              2.  **Quantity and Price:** For a line like "2 Cheeseburger ... 7.70", the quantity is "2" and the price is "7.70". The quantity is almost always a number at the beginning of the line. Be careful not to misread numbers as letters (e.g., '10' can be misread as '1g', or '5' as 'S'). You MUST extract the total line price (7.70), not the per-unit price. The backend will calculate the per-unit price.
               3.  **Modifiers:** A modifier is a line of text immediately following an item that does NOT have a price (e.g., "+ Onion", "Extra Well").
                   - Append the modifier text to the name of the item directly above it.
                   - Example: If "1 Cheeseburger ... 3.85" is followed by "+ Onion", the item name becomes "Cheeseburger + Onion", and the price for the combined item remains "3.85".
+              4.  **Header Information:** Do NOT extract header info like Check Number, Guest Count, Server Name (e.g., "Rachel N."), or Table Number as items. The item list starts after these details.
+              5.  **Item Name Accuracy:** Read item names carefully. Do not abbreviate or substitute them. It is very important to keep the names as they appear on the receipt, even if they look like abbreviations or internal codes. For example, "Chix Strip Bskt" should not be expanded to "Chicken Strip Basket", and "Otg Miscellaneous" should not be interpreted or changed. Extract them exactly as written.
               
-              MATHEMATICAL CONSISTENCY (VERY IMPORTANT):
+              MATHEMATICAL CONSISTENCY (VERY IMPORTANT):    
               1.  **Item Sum vs. Subtotal:** The sum of all extracted "price" fields from the items list MUST EQUAL the receipt's "subtotal" field. This is not optional. If your initial extraction does not sum up correctly, you MUST go back, re-examine the receipt for OCR errors on prices or missed items, and correct your extraction until the math is perfect. Do not invent or adjust prices arbitrarily; the correct prices are on the receipt.
               2.  **Totals Sum vs. Grand Total:** The sum of "subtotal" + "tax_amount" + "gratuity" (if present) MUST EQUAL the "total_amount". If they do not match, adjust the values to ensure they are mathematically correct, prioritizing the accuracy of the total_amount. For example, if subtotal is 207.00, gratuity is 40.75 and total is 270.98, the tax MUST be 23.23, even if it looks like 20.23 on the receipt.
               

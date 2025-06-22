@@ -37,8 +37,8 @@ function AuthContent() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-lg">Loading authentication...</div>
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-orange-50 via-soft-orange-25 to-soft-orange-100">
+                <div className="text-lg text-gray-700">Loading authentication...</div>
             </div>
         );
     }
@@ -46,19 +46,19 @@ function AuthContent() {
     // If user is logged in, show loading while redirecting
     if (user) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-lg">Redirecting to home...</div>
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-orange-50 via-soft-orange-25 to-soft-orange-100">
+                <div className="text-lg text-gray-700">Redirecting to home...</div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gradient-to-br from-soft-orange-50 via-soft-orange-25 to-soft-orange-100">
             {/* Return to Landing Button */}
             <div className="pt-6 px-4 sm:px-6 lg:px-8">
                 <button
                     onClick={handleReturnToLanding}
-                    className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium"
+                    className="inline-flex items-center gap-2 text-gray-600 hover:text-soft-orange-600 transition-colors duration-200 font-medium"
                 >
                     <ArrowLeftIcon className="w-4 h-4" />
                     Return to Landing
@@ -70,22 +70,19 @@ function AuthContent() {
                 <div className="max-w-md w-full space-y-8">
                     <div>
                         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                            Welcome to Your App
+                            Triply
                         </h2>
-                        <p className="mt-2 text-center text-sm text-gray-600">
-                            Sign in to your account or create a new one
-                        </p>
                     </div>
 
-                    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                    <div className="bg-white/80 backdrop-blur-sm py-8 px-4 shadow-lg shadow-zinc-950/15 sm:rounded-2xl sm:px-10 border border-white/20">
                         <div className="flex space-x-4 mb-6">
                             <button
                                 onClick={() => {
                                     setActiveTab('signin');
                                     setError('');
                                 }}
-                                className={`flex-1 py-2 px-4 border-b-2 font-medium text-sm ${activeTab === 'signin'
-                                    ? 'border-indigo-500 text-indigo-600'
+                                className={`flex-1 py-2 px-4 border-b-2 font-medium text-sm transition-colors duration-200 ${activeTab === 'signin'
+                                    ? 'border-soft-orange-500 text-soft-orange-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
@@ -96,8 +93,8 @@ function AuthContent() {
                                     setActiveTab('signup');
                                     setError('');
                                 }}
-                                className={`flex-1 py-2 px-4 border-b-2 font-medium text-sm ${activeTab === 'signup'
-                                    ? 'border-indigo-500 text-indigo-600'
+                                className={`flex-1 py-2 px-4 border-b-2 font-medium text-sm transition-colors duration-200 ${activeTab === 'signup'
+                                    ? 'border-soft-orange-500 text-soft-orange-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
@@ -106,7 +103,7 @@ function AuthContent() {
                         </div>
 
                         {error && (
-                            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                                 {error}
                             </div>
                         )}
@@ -138,8 +135,8 @@ function AuthContent() {
 // Loading fallback component
 function AuthLoading() {
     return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="text-lg">Loading authentication...</div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-orange-50 via-soft-orange-25 to-soft-orange-100">
+            <div className="text-lg text-gray-700">Loading authentication...</div>
         </div>
     );
 }

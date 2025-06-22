@@ -34,9 +34,9 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, onError }) =>
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Email
                 </label>
                 <input
@@ -45,13 +45,13 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, onError }) =>
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-soft-orange-500 focus:border-soft-orange-500 transition-colors duration-200 bg-white/50 backdrop-blur-sm"
                     placeholder="Enter your email"
                 />
             </div>
 
             <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                     Password
                 </label>
                 <input
@@ -60,7 +60,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, onError }) =>
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-soft-orange-500 focus:border-soft-orange-500 transition-colors duration-200 bg-white/50 backdrop-blur-sm"
                     placeholder="Enter your password"
                 />
             </div>
@@ -68,7 +68,7 @@ export const SignInForm: React.FC<SignInFormProps> = ({ onSuccess, onError }) =>
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 hover:from-soft-orange-600 hover:to-soft-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-soft-orange-500 disabled:opacity-50 transition-all duration-200"
             >
                 {loading ? 'Signing in...' : 'Sign In'}
             </button>

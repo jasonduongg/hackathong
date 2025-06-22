@@ -42,7 +42,7 @@ export default function Home() {
       {/* Hero Section */}
       <section id="hero" className="relative min-h-screen scroll-mt-16">
         <HeroBackground />
-        <div className="absolute inset-0 px-4 md:px-8 lg:px-16">
+        <div className="absolute inset-0 px-4 md:px-8 lg:px-16 pt-16">
           <Hero />
         </div>
       </section>

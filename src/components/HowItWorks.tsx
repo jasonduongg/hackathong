@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { CameraIcon, DocumentTextIcon, UsersIcon, CreditCardIcon, VideoCameraIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 
 export default function HowItWorks() {
     const [activeTab, setActiveTab] = useState<'before' | 'after'>('before');
@@ -70,21 +71,30 @@ export default function HowItWorks() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Toggle Buttons */}
                 <div className="flex justify-center mb-16">
-                    <div className="bg-soft-orange-25/50 backdrop-blur-sm rounded-2xl p-2 flex shadow-lg border border-soft-orange-100/50">
+                    <div className="bg-soft-orange-25/50 backdrop-blur-sm rounded-2xl p-2 flex shadow-lg border border-soft-orange-100/50 relative">
+                        {/* Sliding Background */}
+                        <motion.div
+                            className="absolute top-2 bottom-2 w-[calc(50%-4px)] bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 rounded-xl shadow-md"
+                            animate={{
+                                x: activeTab === 'before' ? 0 : '100%'
+                            }}
+                            transition={{
+                                type: "spring",
+                                stiffness: 300,
+                                damping: 30
+                            }}
+                        />
+
                         <button
                             onClick={() => setActiveTab('before')}
-                            className={`px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 ${activeTab === 'before'
-                                ? 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white shadow-md'
-                                : 'text-gray-600 hover:text-gray-900'
+                            className={`relative px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 z-10 ${activeTab === 'before' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             Before Your Trip
                         </button>
                         <button
                             onClick={() => setActiveTab('after')}
-                            className={`px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 ${activeTab === 'after'
-                                ? 'bg-gradient-to-r from-soft-orange-500 to-soft-orange-600 text-white shadow-md'
-                                : 'text-gray-600 hover:text-gray-900'
+                            className={`relative px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 z-10 ${activeTab === 'after' ? 'text-white' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             After Your Trip

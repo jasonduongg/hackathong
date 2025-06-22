@@ -15,6 +15,7 @@ import { getUserProfilesByIds, UserProfile } from '@/lib/users';
 import PartyReceiptUpload from './PartyReceiptUpload';
 import PartyReceipts from './PartyReceipts';
 import PartyPaymentRequests from './PartyPaymentRequests';
+import BeforeFlowTab from './BeforeFlowTab';
 import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -34,7 +35,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts' | 'requests';
+type TabType = 'info' | 'upload' | 'receipts' | 'requests' | 'before-flow';
 
 // Inner component that uses the PartyContext
 const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
@@ -392,6 +393,8 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 return <PartyReceipts partyId={partyId} memberProfiles={memberProfiles} />;
             case 'requests':
                 return <PartyPaymentRequests partyId={partyId} memberProfiles={memberProfiles} onRequestsUpdate={setPendingRequestsCount} />;
+            case 'before-flow':
+                return <BeforeFlowTab partyId={partyId} />;
             default:
                 return null;
         }
@@ -451,6 +454,15 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                 </span>
                             )}
                         </div>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('before-flow')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'before-flow'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        Before Flow
                     </button>
                 </nav>
             </div>

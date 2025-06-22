@@ -44,7 +44,9 @@ export interface PartyReceipt {
     analysis: ReceiptData;
     rawResponse: string;
     uploadedAt: any;
+    displayName?: string; // User-friendly display name for the receipt
     // Assignment fields
     isAssigned?: boolean; // Whether items have been assigned to people
     memberAmounts?: { [userId: string]: number }; // Total amount each member owes
+    paidBy?: string; // User ID of who paid for the receipt
 } 

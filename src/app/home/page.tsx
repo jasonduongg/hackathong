@@ -8,6 +8,7 @@ import { Navbar } from '@/components/Navbar';
 import { PartyView } from '@/components/PartyView';
 import { Invitations } from '@/components/Invitations';
 import { VideoUpload } from '@/components/VideoUpload';
+import { updateUserProfile } from '@/lib/users';
 
 export default function HomePage() {
     const { user, userProfile, loading } = useAuth();
@@ -16,6 +17,8 @@ export default function HomePage() {
     const [showParties, setShowParties] = useState(false);
     const [showInvitations, setShowInvitations] = useState(false);
     const [showVideoUpload, setShowVideoUpload] = useState(false);
+    const [paypalEmail, setPayPalEmail] = useState(userProfile?.paypalEmail || '');
+    const [paypalSaveStatus, setPaypalSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
     if (loading) {
         return (
@@ -166,6 +169,19 @@ export default function HomePage() {
     }
 
     // Show regular home page with "Hi" message
+    const handleSavePaypalEmail = async () => {
+        if (!user) return;
+        setPaypalSaveStatus('saving');
+        try {
+            await updateUserProfile(user.uid, { paypalEmail });
+            setPaypalSaveStatus('saved');
+            setTimeout(() => setPaypalSaveStatus('idle'), 2000);
+        } catch (e) {
+            setPaypalSaveStatus('error');
+            setTimeout(() => setPaypalSaveStatus('idle'), 2000);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 pt-20">
             <Navbar
@@ -178,13 +194,36 @@ export default function HomePage() {
             />
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 <div className="px-4 py-6 sm:px-0">
-                    <div className="text-center">
+                    <div className="text-center mb-12">
                         <h1 className="text-6xl font-bold text-gray-900 mb-4">
                             Hi, {userProfile?.displayName || 'there'}! 👋
                         </h1>
                         <p className="text-xl text-gray-600 mb-8">
                             Welcome to Hack. What would you like to do today?
                         </p>
+                        {/* PayPal Email Input */}
+                        <div className="max-w-md mx-auto mb-8">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Your PayPal Email</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="email"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="your-paypal@email.com"
+                                    value={paypalEmail}
+                                    onChange={e => setPayPalEmail(e.target.value)}
+                                />
+                                <button
+                                    onClick={handleSavePaypalEmail}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                    disabled={paypalSaveStatus === 'saving' || !paypalEmail}
+                                >
+                                    {paypalSaveStatus === 'saving' ? 'Saving...' : paypalSaveStatus === 'saved' ? 'Saved!' : 'Save'}
+                                </button>
+                            </div>
+                            {paypalSaveStatus === 'error' && (
+                                <p className="text-red-500 text-xs mt-1">Failed to save. Try again.</p>
+                            )}
+                        </div>
                         <div className="flex flex-wrap justify-center gap-4">
                             <button
                                 onClick={() => setShowVideoUpload(true)}

@@ -47,6 +47,8 @@ export interface UserProfile {
     website?: string;
     // Party management
     partyIds?: string[];
+    // PayPal email for receiving payments
+    paypalEmail?: string;
 }
 
 // Create a new user profile

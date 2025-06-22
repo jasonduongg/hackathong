@@ -43,6 +43,146 @@ function levenshteinDistance(str1: string, str2: string): number {
     return matrix[str2.length][str1.length];
 }
 
+// Optimized restaurant deduction with early exit
+async function performOptimizedRestaurantDeduction(
+    filteredPlaces: string[], 
+    structuredData: any, 
+    captionText?: string, 
+    accountMentions?: string, 
+    locationTags?: string, 
+    hashtags?: string
+): Promise<{ deducedRestaurant: string | null; restaurantDetails: any; uniqueRestaurantNames: string[]; hasMultipleRestaurants: boolean }> {
+    
+    // Early exit if no places found
+    if (filteredPlaces.length === 0) {
+        return {
+            deducedRestaurant: null,
+            restaurantDetails: null,
+            uniqueRestaurantNames: [],
+            hasMultipleRestaurants: false
+        };
+    }
+
+    // Quick business name filtering
+    const businessKeywords = [
+        'restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco', 
+        'burger', 'sushi', 'coffee', 'bakery', 'deli', 'food', 'eat', 'dining', 'shack',
+        'mcdonalds', 'starbucks', 'chipotle', 'subway', 'kfc', 'pizza hut', 'dominos',
+        'burger king', 'wendys', 'taco bell', 'shake shack', 'five guys', 'in-n-out'
+    ];
+    
+    // Filter out generic descriptions and keep only actual business names
+    const actualBusinessPlaces = filteredPlaces.filter(place => {
+        const lowerPlace = place.toLowerCase();
+        
+        // Reject generic descriptions
+        if (lowerPlace.includes('restaurant referenced by') || 
+            lowerPlace.includes('restaurant mentioned') ||
+            lowerPlace.includes('food establishment') ||
+            lowerPlace.includes('restaurant') && !businessKeywords.some(keyword => lowerPlace.includes(keyword))) {
+            return false;
+        }
+        
+        // Keep if it contains business keywords or looks like an actual name
+        return businessKeywords.some(keyword => lowerPlace.includes(keyword)) || 
+               (place.length > 2 && place.length < 50 && !place.includes(' '));
+    });
+    
+    // If no actual business names found, try to extract from account mentions
+    let placesToAnalyze = actualBusinessPlaces;
+    if (actualBusinessPlaces.length === 0 && accountMentions) {
+        const mentions = accountMentions.split(',').map(m => m.trim());
+        const businessMentions = mentions.filter(mention => {
+            const cleanMention = mention.replace('@', '').toLowerCase();
+            // Look for mentions that could be business names
+            return cleanMention.length > 3 && 
+                   (businessKeywords.some(keyword => cleanMention.includes(keyword)) ||
+                    cleanMention.includes('cali') || 
+                    cleanMention.includes('spartan') ||
+                    cleanMention.includes('burger') ||
+                    cleanMention.includes('taco') ||
+                    cleanMention.includes('pizza'));
+        });
+        
+        if (businessMentions.length > 0) {
+            placesToAnalyze = businessMentions.map(m => m.replace('@', ''));
+        }
+    }
+    
+    // If still no places, use the original filtered places but clean them up
+    if (placesToAnalyze.length === 0) {
+        placesToAnalyze = filteredPlaces.map(place => {
+            // Clean up generic descriptions
+            if (place.includes('referenced by @')) {
+                const mention = place.match(/@([a-zA-Z0-9._]+)/);
+                return mention ? mention[1] : place;
+            }
+            return place;
+        }).filter(place => place.length > 2 && place.length < 50);
+    }
+    
+    const uniqueRestaurantNames = [...new Set(placesToAnalyze)];
+    const hasMultipleRestaurants = uniqueRestaurantNames.length > 1;
+    
+    // If only one restaurant found, skip complex AI analysis
+    if (uniqueRestaurantNames.length === 1) {
+        const restaurantName = uniqueRestaurantNames[0];
+        return {
+            deducedRestaurant: restaurantName,
+            restaurantDetails: {
+                name: restaurantName,
+                isChain: false,
+                address: null,
+                website: null,
+                hours: null,
+                phone: null,
+                rating: null,
+                placeId: null
+            },
+            uniqueRestaurantNames,
+            hasMultipleRestaurants: false
+        };
+    }
+    
+    // For multiple restaurants, use simplified logic instead of full AI analysis
+    if (hasMultipleRestaurants) {
+        // Use the first business-like place name as primary
+        const primaryRestaurant = placesToAnalyze[0];
+        return {
+            deducedRestaurant: primaryRestaurant,
+            restaurantDetails: {
+                name: primaryRestaurant,
+                isChain: false,
+                address: null,
+                website: null,
+                hours: null,
+                phone: null,
+                rating: null,
+                placeId: null
+            },
+            uniqueRestaurantNames,
+            hasMultipleRestaurants: true
+        };
+    }
+    
+    // Fallback to first place name or null
+    return {
+        deducedRestaurant: placesToAnalyze[0] || null,
+        restaurantDetails: placesToAnalyze[0] ? {
+            name: placesToAnalyze[0],
+            isChain: false,
+            address: null,
+            website: null,
+            hours: null,
+            phone: null,
+            rating: null,
+            placeId: null
+        } : null,
+        uniqueRestaurantNames,
+        hasMultipleRestaurants: false
+    };
+}
+
 export async function POST(request: NextRequest) {
     try {
         console.log('API route called - starting request processing');
@@ -88,7 +228,7 @@ export async function POST(request: NextRequest) {
 
         let llmResponse;
 
-        // Handle multiple images (Instagram screenshots)
+        // Handle multiple images (Instagram screenshots) - OPTIMIZED
         if (images && images.length > 0) {
             console.log(`Processing ${images.length} Instagram screenshots`);
             
@@ -192,12 +332,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Enhance place names with Google search validation
-        console.log('Enhancing place names with search validation...');
-        const { enhancedPlaces, filteredPlaces } = await enhancePlaceNamesWithSearch(
-            structuredData.place_names,
-            [...structuredData.tags, ...(structuredData.context_clues || [])]
-        );
+        // OPTIMIZED: Only enhance place names if we have them and they're not empty
+        let enhancedPlaces: any[] = [];
+        let filteredPlaces: string[] = [];
+        
+        if (structuredData.place_names && structuredData.place_names.length > 0) {
+            console.log('Enhancing place names with search validation...');
+            const enhancementResult = await enhancePlaceNamesWithSearch(
+                structuredData.place_names,
+                [...structuredData.tags, ...(structuredData.context_clues || [])]
+            );
+            enhancedPlaces = enhancementResult.enhancedPlaces;
+            filteredPlaces = enhancementResult.filteredPlaces;
+        } else {
+            filteredPlaces = [];
+        }
 
         // Update structured data with validated places
         const enhancedStructuredData = {
@@ -207,328 +356,37 @@ export async function POST(request: NextRequest) {
             captionText: captionText || undefined
         };
 
-        // Geocode the validated place names
+        // OPTIMIZED: Parallel geocoding for better performance
         console.log('Geocoding place names...');
-        const geocodedPlaces = [];
-        for (const placeName of filteredPlaces) {
+        const geocodingPromises = filteredPlaces.map(async (placeName) => {
             try {
                 const geocoded = await geocodeLocation(placeName);
                 if (geocoded) {
-                    geocodedPlaces.push({
+                    return {
                         name: placeName,
                         ...geocoded
-                    });
+                    };
                 }
+                return null;
             } catch (error) {
                 console.error(`Failed to geocode ${placeName}:`, error);
+                return null;
             }
-        }
-
-        // Restaurant Deduction: Use AI to determine the actual restaurant from all available data
-        console.log('Performing restaurant deduction analysis...');
-        let deducedRestaurant = null;
-        let restaurantDetails = null;
-        let uniqueRestaurantNames: string[] = [];
-        let hasMultipleRestaurants = false;
-        let placesToAnalyze: string[] = [];
+        });
         
-        if (filteredPlaces.length > 0 || (structuredData.context_clues && structuredData.context_clues.length > 0)) {
-            try {
-                // Filter out landmarks and tourist attractions from place names
-                const landmarkKeywords = [
-                    'bridge', 'park', 'square', 'plaza', 'monument', 'statue', 'tower', 'building', 'museum', 
-                    'gallery', 'theater', 'stadium', 'arena', 'airport', 'station', 'terminal', 'harbor', 
-                    'beach', 'mountain', 'lake', 'river', 'canyon', 'valley', 'island', 'peninsula',
-                    'golden gate', 'times square', 'central park', 'eiffel tower', 'statue of liberty',
-                    'empire state', 'chrysler building', 'brooklyn bridge', 'manhattan bridge'
-                ];
-                
-                const businessKeywords = [
-                    'restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco', 
-                    'burger', 'sushi', 'coffee', 'bakery', 'deli', 'food', 'eat', 'dining', 'shack',
-                    'mcdonalds', 'starbucks', 'chipotle', 'subway', 'kfc', 'pizza hut', 'dominos',
-                    'burger king', 'wendys', 'taco bell', 'shake shack', 'five guys', 'in-n-out'
-                ];
-                
-                // Filter places to only include business-like names
-                const businessPlaces = filteredPlaces.filter(place => {
-                    const lowerPlace = place.toLowerCase();
-                    // Include if it contains business keywords
-                    const hasBusinessKeyword = businessKeywords.some(keyword => lowerPlace.includes(keyword));
-                    // Exclude if it contains landmark keywords
-                    const hasLandmarkKeyword = landmarkKeywords.some(keyword => lowerPlace.includes(keyword));
-                    
-                    return hasBusinessKeyword && !hasLandmarkKeyword;
-                });
-                
-                // If no business places found, use all places but prioritize business-like names
-                placesToAnalyze = businessPlaces.length > 0 ? businessPlaces : filteredPlaces;
-                
-                // Check if we have multiple different restaurant names
-                uniqueRestaurantNames = [...new Set(placesToAnalyze)];
-                hasMultipleRestaurants = uniqueRestaurantNames.length > 1;
-                
-                console.log(`Found ${uniqueRestaurantNames.length} unique restaurant names: ${uniqueRestaurantNames.join(', ')}`);
-                
-                // Analyze enhanced places to determine if it's a chain
-                let isChain = false;
-                let chainLocations = [];
-                
-                if (enhancedStructuredData.enhanced_places && enhancedStructuredData.enhanced_places.length > 0) {
-                    // Check if any place has multiple locations in search results
-                    for (const place of enhancedStructuredData.enhanced_places) {
-                        if (place.searchResults && place.searchResults.length > 1) {
-                            // Check if the search results are for the same business name but different addresses
-                            const businessNames = place.searchResults.map(result => result.name.toLowerCase());
-                            const addresses = place.searchResults.map(result => result.formatted_address);
-                            
-                            // If we have multiple results with similar business names but different addresses, it's likely a chain
-                            const uniqueAddresses = [...new Set(addresses)];
-                            
-                            // More sophisticated chain detection:
-                            // 1. Check if all business names are very similar (same restaurant)
-                            // 2. Check if addresses are in different cities/regions (indicating chain)
-                            // 3. Check if the place IDs are different (different physical locations)
-                            
-                            const allNamesSimilar = businessNames.every(name => {
-                                const baseName = businessNames[0];
-                                const similarity = calculateStringSimilarity(name, baseName);
-                                return similarity > 0.8; // 80% similarity threshold
-                            });
-                            
-                            const differentCities = uniqueAddresses.length > 1;
-                            const differentPlaceIds = place.searchResults.length > 1 && 
-                                new Set(place.searchResults.map(r => r.place_id)).size > 1;
-                            
-                            // Only consider it a chain if:
-                            // - Names are very similar (same restaurant)
-                            // - Multiple different cities/regions
-                            // - Different place IDs (different physical locations)
-                            if (allNamesSimilar && differentCities && differentPlaceIds) {
-                                isChain = true;
-                                chainLocations = place.searchResults;
-                                console.log(`Detected chain: ${place.originalName} with ${uniqueAddresses.length} locations`);
-                                break;
-                            } else if (uniqueAddresses.length > 1) {
-                                console.log(`Found multiple locations for ${place.originalName}, but likely different restaurants with similar names`);
-                            }
-                        }
-                    }
-                }
-                
-                // If we have multiple different restaurant names, they're not a chain
-                if (hasMultipleRestaurants) {
-                    console.log(`Multiple different restaurants detected: ${uniqueRestaurantNames.join(', ')} - not a chain`);
-                    isChain = false;
-                }
-                
-                const deductionPrompt = `Based on the following information from a video analysis, determine the most likely restaurant or food establishment being featured:
+        const geocodedPlaces = (await Promise.all(geocodingPromises)).filter(Boolean);
 
-Available Data:
-- Place names identified: ${placesToAnalyze.join(', ') || 'None'}
-- Context clues: ${structuredData.context_clues?.join(', ') || 'None'}
-- Tags: ${structuredData.tags?.join(', ') || 'None'}
-- Foods shown: ${structuredData.foods_shown?.join(', ') || 'None'}
-- Caption text: ${captionText || 'None'}
-- Location tags: ${locationTags || 'None'}
-- Hashtags: ${hashtags || 'None'}
-- Multiple restaurants detected: ${hasMultipleRestaurants ? 'YES' : 'NO'}
-- Chain detection: ${isChain ? 'YES - Multiple locations found' : 'NO - Single location or multiple different restaurants'}
-
-CRITICAL ANALYSIS RULES:
-1. PRIORITIZE VISIBLE RESTAURANT NAMES from the video content over account mentions
-2. Account mentions (@username) are often just user tags and may NOT be the restaurant name
-3. Only use account mentions if they clearly match a restaurant name visible in the video
-4. Location tags (📍 Address) show WHERE the restaurant is, not the restaurant name
-5. Do NOT confuse street names or addresses with restaurant names
-6. Look for specific business branding and names that are actually visible in the video content
-
-MULTIPLE RESTAURANT HANDLING:
-1. If multiple DIFFERENT restaurant names are found (e.g., "Trill Burgers", "Super Duper Burgers", "4505 BBQ"), they are NOT a chain
-2. Each different restaurant name represents a separate establishment
-3. Only consider it a chain if the SAME restaurant name appears in multiple locations
-4. For multiple restaurants, focus on the one most prominently featured or mentioned
-5. Look for the restaurant that appears most frequently or is most emphasized in the content
-
-CHAIN DETECTION RULES:
-1. If the restaurant name appears in multiple locations in Google Places search results, it's likely a chain
-2. Common chain indicators: multiple addresses, same business name in different cities/areas
-3. Single-location restaurants typically have only one address or location
-4. When in doubt, if the business has multiple locations, mark as chain
-
-Examples:
-- If the video shows "Super Duper Burgers" signage but mentions "@trillburgers", the restaurant is "Super Duper Burgers"
-- If caption says "SPARTAN TACOS" and location is "4848 San Felipe Rd", the restaurant is "Spartan Tacos" or "Cali Spartan"
-- If caption mentions "@cali.spartan", the restaurant is likely "Cali Spartan"
-- Do NOT deduce "San Felipe Mexican Restaurant" just because the address is on "San Felipe Rd"
-- If "Cali Spartan" appears in multiple locations (4848 San Felipe Rd, 1008 Blossom Hill Rd, etc.), it's a chain
-- If "Trill Burgers" and "Super Duper Burgers" are both mentioned, they are different restaurants, not a chain
-
-Instructions:
-1. Analyze all the data to identify the most likely restaurant name
-2. Prioritize VISIBLE restaurant names from the video content over account mentions
-3. Consider food types, location context, and any brand names mentioned
-4. If multiple places are mentioned, determine which is the primary restaurant being featured
-5. Focus ONLY on restaurants, cafes, and food establishments - NOT landmarks or tourist attractions
-6. Determine if this is a chain restaurant or a single-location restaurant based on:
-   - Multiple locations found in search results
-   - Common chain names (McDonald's, Starbucks, Chipotle, etc.)
-   - Business model indicators
-7. Return a JSON object with the following structure:
-   {
-     "name": "Restaurant Name",
-     "isChain": true/false,
-     "chainName": "Chain Name (if applicable)",
-     "location": "Specific location if single restaurant"
-   }
-8. If no clear restaurant can be determined, return {"name": "Unknown Restaurant", "isChain": false}
-
-Restaurant Analysis:`;
-
-                // Use the same LLM service to get the deduction
-                const anthropic = new (await import('@anthropic-ai/sdk')).default({
-                    apiKey: process.env.ANTHROPIC_API_KEY,
-                });
-                
-                const deductionResponse = await anthropic.messages.create({
-                    model: "claude-3-5-sonnet-20241022",
-                    max_tokens: 200,
-                    system: "You are a restaurant identification expert. Return only valid JSON, nothing else.",
-                    messages: [
-                        {
-                            role: "user",
-                            content: deductionPrompt
-                        }
-                    ]
-                });
-
-                // Extract the restaurant information from the response
-                const deductionText = deductionResponse.content[0].type === 'text' ? deductionResponse.content[0].text : '';
-                
-                try {
-                    // Try to parse as JSON
-                    const restaurantInfo = JSON.parse(deductionText);
-                    deducedRestaurant = restaurantInfo.name;
-                    
-                    // Override the AI's chain detection with our analysis if we found multiple locations
-                    const finalIsChain = isChain || restaurantInfo.isChain;
-                    
-                    // If it's a single-location restaurant, gather detailed information
-                    if (restaurantInfo.name && restaurantInfo.name !== 'Unknown Restaurant' && !finalIsChain) {
-                        console.log('Single-location restaurant detected, gathering details...');
-                        
-                        // Use Google Places API to get detailed information
-                        try {
-                            const searchQuery = restaurantInfo.location ? `${restaurantInfo.name} ${restaurantInfo.location}` : restaurantInfo.name;
-                            const placeDetails = await getPlaceDetails(searchQuery);
-                            
-                            if (placeDetails) {
-                                restaurantDetails = {
-                                    name: restaurantInfo.name,
-                                    isChain: false,
-                                    address: placeDetails.formatted_address || null,
-                                    website: placeDetails.website || null,
-                                    hours: placeDetails.opening_hours?.weekday_text || null,
-                                    phone: placeDetails.formatted_phone_number || null,
-                                    rating: placeDetails.rating || null,
-                                    placeId: placeDetails.place_id || null
-                                };
-                            } else {
-                                restaurantDetails = {
-                                    name: restaurantInfo.name,
-                                    isChain: false,
-                                    address: null,
-                                    website: null,
-                                    hours: null,
-                                    phone: null,
-                                    rating: null,
-                                    placeId: null
-                                };
-                            }
-                        } catch (detailsError) {
-                            console.error('Error getting place details:', detailsError);
-                            restaurantDetails = {
-                                name: restaurantInfo.name,
-                                isChain: false,
-                                address: null,
-                                website: null,
-                                hours: null,
-                                phone: null,
-                                rating: null,
-                                placeId: null
-                            };
-                        }
-                    } else if (finalIsChain) {
-                        // For chains, just provide basic info with null address details
-                        restaurantDetails = {
-                            name: restaurantInfo.name,
-                            isChain: true,
-                            chainName: restaurantInfo.chainName || restaurantInfo.name,
-                            address: null,
-                            website: null,
-                            hours: null,
-                            phone: null,
-                            rating: null,
-                            placeId: null
-                        };
-                    } else {
-                        // For unknown restaurants, provide minimal info
-                        restaurantDetails = {
-                            name: restaurantInfo.name || 'Unknown Restaurant',
-                            isChain: false,
-                            address: null,
-                            website: null,
-                            hours: null,
-                            phone: null,
-                            rating: null,
-                            placeId: null
-                        };
-                    }
-                    
-                } catch (parseError) {
-                    console.error('Error parsing restaurant deduction JSON:', parseError);
-                    // Fallback to simple name extraction
-                    const lines = deductionText.split('\n');
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (trimmed && !trimmed.startsWith('Restaurant Name:') && trimmed !== 'Unknown Restaurant') {
-                            deducedRestaurant = trimmed;
-                            break;
-                        }
-                    }
-                }
-
-                // If no clear restaurant found in the response, try to extract from place names
-                if (!deducedRestaurant || deducedRestaurant === 'Unknown Restaurant') {
-                    // Look for the most restaurant-like name in the filtered places
-                    for (const place of placesToAnalyze) {
-                        const lowerPlace = place.toLowerCase();
-                        if (businessKeywords.some(keyword => lowerPlace.includes(keyword))) {
-                            deducedRestaurant = place;
-                            break;
-                        }
-                    }
-                    
-                    // If still no restaurant found, use the first business-like place name
-                    if (!deducedRestaurant && placesToAnalyze.length > 0) {
-                        deducedRestaurant = placesToAnalyze[0];
-                    }
-                }
-
-                console.log('Restaurant deduction result:', deducedRestaurant);
-                console.log('Restaurant details:', restaurantDetails);
-            } catch (error) {
-                console.error('Error during restaurant deduction:', error);
-                // Fallback to first business-like place name
-                if (filteredPlaces.length > 0) {
-                    const businessKeywords = ['restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco', 'burger', 'sushi'];
-                    const businessPlace = filteredPlaces.find(place => 
-                        businessKeywords.some(keyword => place.toLowerCase().includes(keyword))
-                    );
-                    deducedRestaurant = businessPlace || filteredPlaces[0];
-                }
-            }
-        }
+        // OPTIMIZED: Simplified restaurant deduction
+        console.log('Performing optimized restaurant deduction...');
+        const { deducedRestaurant, restaurantDetails, uniqueRestaurantNames, hasMultipleRestaurants } = 
+            await performOptimizedRestaurantDeduction(
+                filteredPlaces, 
+                structuredData, 
+                captionText, 
+                accountMentions, 
+                locationTags, 
+                hashtags
+            );
 
         return NextResponse.json({
             success: true,
@@ -543,7 +401,7 @@ Restaurant Analysis:`;
             geocodedPlaces,
             deducedRestaurant,
             restaurantDetails,
-            allDetectedRestaurants: uniqueRestaurantNames || placesToAnalyze,
+            allDetectedRestaurants: uniqueRestaurantNames || filteredPlaces,
             hasMultipleRestaurants: hasMultipleRestaurants || false,
             processingInfo: {
                 frameCount: frames ? frames.length : 0,

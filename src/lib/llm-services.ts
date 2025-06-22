@@ -571,7 +571,7 @@ export async function processImageFile(
     }
 }
 
-// Process Multiple Images (Instagram Screenshots)
+// Process Multiple Images (Instagram Screenshots) - OPTIMIZED
 export async function processMultipleImages(images: File[], promptType: string, enhancedContext?: string): Promise<any> {
     console.log(`Processing ${images.length} images with enhanced context`);
     
@@ -580,32 +580,39 @@ export async function processMultipleImages(images: File[], promptType: string, 
     });
 
     try {
-        // Process images in larger batches to maximize efficiency
-        const batchSize = 15; // Increased from 3 to 15 (Claude Sonnet can handle up to 20)
+        // OPTIMIZED: Use larger batch size and process fewer batches
+        const batchSize = Math.min(20, images.length); // Use maximum batch size possible
         const batches = [];
         
         for (let i = 0; i < images.length; i += batchSize) {
             batches.push(images.slice(i, i + batchSize));
         }
         
-        console.log(`Too many images (${images.length}), processing in batches of ${batchSize}`);
-        console.log(`Processing ${batches.length} batches`);
+        console.log(`Processing ${images.length} images in ${batches.length} batch(es) of ${batchSize}`);
         
-        const results = [];
-        for (let i = 0; i < batches.length; i++) {
-            const batch = batches[i];
-            console.log(`Processing batch ${i + 1}/${batches.length}`);
-            
-            try {
-                const result = await processImageBatch(anthropic, batch, i + 1, batches.length, promptType, enhancedContext || '');
-                results.push(result);
-            } catch (error) {
-                console.error(`Failed to process batch ${i + 1}:`, error);
-                throw error;
+        // OPTIMIZED: Process all batches in parallel if possible, otherwise sequentially
+        let results;
+        if (batches.length === 1) {
+            // Single batch - process directly
+            results = [await processImageBatchOptimized(anthropic, batches[0], promptType, enhancedContext || '')];
+        } else {
+            // Multiple batches - process sequentially to avoid rate limits
+            results = [];
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                console.log(`Processing batch ${i + 1}/${batches.length}`);
+                
+                try {
+                    const result = await processImageBatchOptimized(anthropic, batch, promptType, enhancedContext || '');
+                    results.push(result);
+                } catch (error) {
+                    console.error(`Failed to process batch ${i + 1}:`, error);
+                    throw error;
+                }
             }
         }
         
-        // Combine results from all batches
+        // OPTIMIZED: Combine results more efficiently
         const combinedAnalysis = results.map(result => 
             result.content[0].type === 'text' ? result.content[0].text : ''
         ).join('\n\n---\n\n');
@@ -626,27 +633,12 @@ export async function processMultipleImages(images: File[], promptType: string, 
     }
 }
 
-// Helper function to delay execution
-function delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Helper function to parse retry-after header
-function parseRetryAfter(retryAfter: string): number {
-    const seconds = parseInt(retryAfter);
-    if (!isNaN(seconds)) {
-        return seconds * 1000; // Convert to milliseconds
-    }
-    return 60000; // Default to 60 seconds if parsing fails
-}
-
-async function processImageBatch(anthropic: Anthropic, images: File[], batchIndex: number, totalBatches: number, promptType: string, context: string): Promise<any> {
-    console.log(`Processing batch ${batchIndex}/${totalBatches}`);
+// OPTIMIZED: Streamlined batch processing
+async function processImageBatchOptimized(anthropic: Anthropic, images: File[], promptType: string, context: string): Promise<any> {
+    console.log(`Processing batch of ${images.length} images`);
     
-    // Convert images to base64
-    const base64Images = [];
-    for (let i = 0; i < images.length; i++) {
-        const image = images[i];
+    // OPTIMIZED: Convert images to base64 more efficiently
+    const base64Images = await Promise.all(images.map(async (image, index) => {
         const arrayBuffer = await image.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString('base64');
         const mimeType = image.type;
@@ -657,33 +649,36 @@ async function processImageBatch(anthropic: Anthropic, images: File[], batchInde
                              mimeType === 'image/gif' ? 'image/gif' :
                              mimeType === 'image/webp' ? 'image/webp' : 'image/png';
         
-        base64Images.push({
+        console.log(`Converted image ${index + 1}/${images.length} to base64 (${base64.length} bytes)`);
+        
+        return {
             type: "image" as const,
             source: {
                 type: "base64" as const,
                 media_type: validMimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
                 data: base64
             }
-        });
-        console.log(`Converted image ${i + 1}/${images.length} to base64 (${base64.length} bytes)`);
-    }
+        };
+    }));
 
+    // OPTIMIZED: Simplified system prompt for faster processing
     const systemPrompt = `You are an expert content analyzer. Analyze the provided images and extract structured information about restaurants, food, and locations.
 
 ${context}
 
 CRITICAL: You MUST return your response in valid JSON format only. No other text.
 
-IMPORTANT: A single video can feature MULTIPLE different restaurants and locations. Look carefully for:
-- Different restaurant names, logos, or signage
-- Different locations, neighborhoods, or cities
-- Different price points or restaurant types
-- Different food styles or cuisines
-- Any text, captions, or mentions that indicate different places
+IMPORTANT RULES FOR RESTAURANT NAMES:
+1. Extract ONLY actual business names, brand names, or restaurant names that are visible or mentioned
+2. DO NOT create generic descriptions like "Mexican restaurant" or "restaurant referenced by @username"
+3. Look for specific business names like "Cali Spartan", "Super Duper Burgers", "McDonald's", etc.
+4. If you see @username mentions, only include them if they clearly represent a business name
+5. If no specific restaurant name is found, use "Unknown Restaurant" or leave the array empty
+6. Focus on names that appear on signage, menus, receipts, or are clearly mentioned as business names
 
 Return a JSON object with this exact structure:
 {
-  "place_names": ["list", "of", "ALL", "restaurant", "names", "and", "locations", "found"],
+  "place_names": ["ACTUAL_BUSINESS_NAME_1", "ACTUAL_BUSINESS_NAME_2"],
   "multiple_locations": true/false,
   "activity_type": "restaurant_review" or "food_showcase" or "food_tour" or "other",
   "foods_shown": ["list", "of", "food", "items"],
@@ -692,14 +687,20 @@ Return a JSON object with this exact structure:
 }
 
 Focus on identifying:
-- ALL restaurant names and brands mentioned or visible
+- ACTUAL restaurant names and brands (not generic descriptions)
 - Food items and dishes shown
 - Location information for each place
 - Business details and distinguishing features
-- Any text, signage, or captions that indicate different locations
-- Price points or restaurant types that suggest different establishments
 
-If you see multiple restaurants (e.g., "Super Duper Burgers", "Trill Burgers", "4505 BBQ"), list ALL of them in place_names.
+Examples of GOOD place_names:
+- ["Cali Spartan", "Super Duper Burgers"]
+- ["McDonald's", "Starbucks"]
+- ["Unknown Restaurant"] (if no name found)
+
+Examples of BAD place_names:
+- ["Mexican restaurant referenced by @cali.spartan"]
+- ["restaurant mentioned in caption"]
+- ["food establishment"]
 
 Return ONLY the JSON object, nothing else.`;
 
@@ -716,28 +717,30 @@ Return ONLY the JSON object, nothing else.`;
         }
     ];
 
-    // Simple retry logic without delays
+    // OPTIMIZED: Simplified retry logic
     let retryCount = 0;
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced retries for faster processing
     
     while (retryCount <= maxRetries) {
         try {
             const response = await anthropic.messages.create({
                 model: "claude-3-5-sonnet-20241022",
-                max_tokens: 1500,
+                max_tokens: 1000, // Reduced for faster response
                 system: systemPrompt,
                 messages: messages
             });
 
-            console.log(`Successfully processed batch ${batchIndex}/${totalBatches}`);
+            console.log(`Successfully processed batch of ${images.length} images`);
             return response;
             
         } catch (error: any) {
-            console.error(`Error processing batch ${batchIndex}:`, error.message);
+            console.error(`Error processing batch:`, error.message);
             
             if (retryCount < maxRetries) {
                 retryCount++;
-                console.log(`Retrying batch ${batchIndex} (attempt ${retryCount}/${maxRetries + 1})...`);
+                console.log(`Retrying batch (attempt ${retryCount}/${maxRetries + 1})...`);
+                // OPTIMIZED: Shorter delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 continue;
             }
             
@@ -745,5 +748,19 @@ Return ONLY the JSON object, nothing else.`;
         }
     }
     
-    throw new Error(`Failed to process batch ${batchIndex} after ${maxRetries + 1} attempts`);
+    throw new Error(`Failed to process batch after ${maxRetries + 1} attempts`);
+}
+
+// Helper function to delay execution
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Helper function to parse retry-after header
+function parseRetryAfter(retryAfter: string): number {
+    const seconds = parseInt(retryAfter);
+    if (!isNaN(seconds)) {
+        return seconds * 1000; // Convert to milliseconds
+    }
+    return 60000; // Default to 60 seconds if parsing fails
 } 

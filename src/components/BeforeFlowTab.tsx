@@ -172,12 +172,37 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
                 // Add all screenshots to the form data
                 screenshotData.screenshots.forEach((screenshot: string, index: number) => {
-                    analysisFormData.append('screenshots', screenshot);
+                    // Convert base64 string to File object
+                    const byteString = atob(screenshot);
+                    const ab = new ArrayBuffer(byteString.length);
+                    const ia = new Uint8Array(ab);
+                    for (let i = 0; i < byteString.length; i++) {
+                        ia[i] = byteString.charCodeAt(i);
+                    }
+                    const blob = new Blob([ab], { type: 'image/png' });
+                    analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
                 });
+
+                // Add Instagram metadata if available
+                if (screenshotData.captionText) {
+                    analysisFormData.append('captionText', screenshotData.captionText);
+                }
+                if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
+                    analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
+                }
+                if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
+                    analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
+                }
+                if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
+                    analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
+                }
+                if (screenshotData.videoDuration > 0) {
+                    analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
+                }
 
                 setBeforeFlowProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 60, details: 'Sending to AI for analysis' });
 
-                const analysisResponse = await fetch('/api/process-screenshots', {
+                const analysisResponse = await fetch('/api/process-video', {
                     method: 'POST',
                     body: analysisFormData
                 });

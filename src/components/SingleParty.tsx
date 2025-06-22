@@ -14,7 +14,8 @@ import {
 import { getUserProfilesByIds, UserProfile } from '@/lib/users';
 import PartyReceiptUpload from './PartyReceiptUpload';
 import PartyReceipts from './PartyReceipts';
-import { PartyProvider } from '@/contexts/PartyContext';
+import PartyPaymentRequests from './PartyPaymentRequests';
+import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
@@ -33,19 +34,36 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts';
+type TabType = 'info' | 'upload' | 'receipts' | 'requests';
 
-const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
+// Inner component that uses the PartyContext
+const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const { user, userProfile } = useAuth();
+    const { receipts } = useParty();
+    const [activeTab, setActiveTab] = useState<TabType>('info');
     const [party, setParty] = useState<PartyDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [memberProfiles, setMemberProfiles] = useState<UserProfile[]>([]);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
     const [searchEmail, setSearchEmail] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showInviteForm, setShowInviteForm] = useState(false);
     const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
     const [invitedUserProfiles, setInvitedUserProfiles] = useState<{ [userId: string]: UserProfile }>({});
-    const [activeTab, setActiveTab] = useState<TabType>('info');
+
+    const fetchPendingRequestsCount = async () => {
+        try {
+            const response = await fetch(`/api/party-payment-requests?partyId=${partyId}`);
+            const data = await response.json();
+            if (response.ok) {
+                const requests = data.paymentRequests || [];
+                const pendingCount = requests.filter((r: any) => r.status === 'pending').length;
+                setPendingRequestsCount(pendingCount);
+            }
+        } catch (error) {
+            console.error('Error fetching pending requests count:', error);
+        }
+    };
 
     useEffect(() => {
         const fetchPartyDetails = async () => {
@@ -55,17 +73,14 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
-                    const partyData = { id: docSnap.id, ...docSnap.data() } as PartyDetails;
+                    const partyData = docSnap.data() as PartyDetails;
                     setParty(partyData);
 
-                    // Fetch member profiles if party has members
+                    // Fetch member profiles
                     if (partyData.members && partyData.members.length > 0) {
                         const profiles = await getUserProfilesByIds(partyData.members);
                         setMemberProfiles(profiles);
                     }
-                } else {
-                    console.log('No such document!');
-                    setParty(null);
                 }
             } catch (error) {
                 console.error("Error fetching party details:", error);
@@ -101,18 +116,9 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
         if (partyId) {
             fetchPartyDetails();
             fetchPendingInvitations();
+            fetchPendingRequestsCount();
         }
     }, [partyId, user]);
-
-    // Helper function to get display name or initial for a user
-    const getUserDisplay = (profile: UserProfile) => {
-        if (profile.photoURL) {
-            return { type: 'image' as const, value: profile.photoURL };
-        }
-        const initial = profile.displayName?.charAt(0)?.toUpperCase() ||
-            profile.email?.charAt(0)?.toUpperCase() || 'U';
-        return { type: 'initial' as const, value: initial };
-    };
 
     // Helper function to get background color for initials
     const getInitialColor = (uid: string) => {
@@ -122,6 +128,12 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
         ];
         const index = uid.charCodeAt(0) % colors.length;
         return colors[index];
+    };
+
+    // Helper function to get first initial
+    const getInitial = (profile: UserProfile) => {
+        return profile.displayName?.charAt(0)?.toUpperCase() ||
+            profile.email?.charAt(0)?.toUpperCase() || 'U';
     };
 
     const handleSearchUsers = async () => {
@@ -203,109 +215,82 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
             case 'info':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900">Party Information</h2>
-                            {party.members && party.members.length < 4 && (
-                                <button
-                                    onClick={() => setShowInviteForm(!showInviteForm)}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
-                                >
-                                    {showInviteForm ? 'Cancel' : 'Invite Members'}
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Member List */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-medium text-gray-900 mb-3">
-                                Members ({memberProfiles.length}/4)
-                            </h3>
-                            <div className="space-y-3">
-                                {memberProfiles.map((profile) => {
-                                    const display = getUserDisplay(profile);
-                                    return (
-                                        <div key={profile.uid} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center">
-                                                {display.type === 'image' ? (
-                                                    <img
-                                                        src={display.value}
-                                                        alt={profile.displayName || 'Member'}
-                                                        className="w-full h-full rounded-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className={`w-full h-full rounded-full flex items-center justify-center text-white text-sm font-medium ${getInitialColor(profile.uid)}`}>
-                                                        {display.value}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-gray-900">
-                                                    {profile.displayName || 'Unknown User'}
-                                                </p>
-                                                <p className="text-xs text-gray-500">{profile.email}</p>
-                                            </div>
-                                            {profile.uid === party.createdBy && (
-                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                                    Creator
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {memberProfiles.length === 0 && (
-                                    <p className="text-gray-500 text-center py-4">No members found</p>
-                                )}
+                        {/* Party Header */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">{party.name}</h1>
+                                <p className="text-gray-600">{party.description}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm text-gray-500">Created by</p>
+                                <p className="font-medium text-gray-900">
+                                    {memberProfiles.find(p => p.uid === party.createdBy)?.displayName || 'Unknown'}
+                                </p>
                             </div>
                         </div>
 
-                        {/* Pending Invitations Bar */}
-                        {pendingInvitations.length > 0 && (
-                            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-shrink-0">
-                                            <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h3 className="text-sm font-medium text-yellow-800">
-                                                Pending Invitations ({pendingInvitations.length})
-                                            </h3>
-                                            <p className="text-sm text-yellow-700">
-                                                Waiting for responses from invited members
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex-shrink-0">
-                                        <button
-                                            onClick={() => setShowInviteForm(!showInviteForm)}
-                                            className="text-sm text-yellow-800 hover:text-yellow-900 underline"
-                                        >
-                                            {showInviteForm ? 'Hide' : 'Invite More'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Pending Invitations List */}
-                                <div className="space-y-2">
-                                    {pendingInvitations.map((invitation) => (
-                                        <div key={invitation.id} className="flex items-center justify-between bg-white rounded-md p-2 border border-yellow-200">
-                                            <div className="flex items-center space-x-2">
-                                                <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center">
-                                                    <svg className="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                                    </svg>
-                                                </div>
-                                                <span className="text-sm text-gray-700">
-                                                    Invited: {invitedUserProfiles[invitation.toUserId]?.displayName || 'Unknown User'}
-                                                </span>
-                                            </div>
-                                            <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">
-                                                Pending
+                        {/* Members Section */}
+                        <div className="mb-6">
+                            <h3 className="text-lg font-medium text-gray-900 mb-3">Members ({memberProfiles.length})</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                {memberProfiles.map((profile) => (
+                                    <div key={profile.uid} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getInitialColor(profile.uid)}`}>
+                                            <span className="text-sm font-medium text-white">
+                                                {getInitial(profile)}
                                             </span>
                                         </div>
-                                    ))}
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">
+                                                {profile.displayName || profile.email?.split('@')[0] || 'Unknown'}
+                                            </p>
+                                            <p className="text-xs text-gray-500">{profile.email}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Pending Invitations */}
+                        {pendingInvitations.length > 0 && (
+                            <div className="mb-6">
+                                <h3 className="text-lg font-medium text-gray-900 mb-3">Pending Invitations ({pendingInvitations.length})</h3>
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                            <span className="text-sm font-medium text-yellow-800">Invitations sent</span>
+                                        </div>
+                                        <div className="flex-shrink-0">
+                                            <button
+                                                onClick={() => setShowInviteForm(!showInviteForm)}
+                                                className="text-sm text-yellow-800 hover:text-yellow-900 underline"
+                                            >
+                                                {showInviteForm ? 'Hide' : 'Invite More'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Pending Invitations List */}
+                                    <div className="space-y-2">
+                                        {pendingInvitations.map((invitation) => (
+                                            <div key={invitation.id} className="flex items-center justify-between bg-white rounded-md p-2 border border-yellow-200">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center">
+                                                        <svg className="w-3 h-3 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                        </svg>
+                                                    </div>
+                                                    <span className="text-sm text-gray-700">
+                                                        Invited: {invitedUserProfiles[invitation.toUserId]?.displayName || 'Unknown User'}
+                                                    </span>
+                                                </div>
+                                                <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">
+                                                    Pending
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -401,58 +386,88 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
             case 'upload':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-
                         <PartyReceiptUpload partyId={partyId} />
                     </div>
                 );
             case 'receipts':
                 return <PartyReceipts partyId={partyId} memberProfiles={memberProfiles} />;
+            case 'requests':
+                return <PartyPaymentRequests partyId={partyId} memberProfiles={memberProfiles} onRequestsUpdate={setPendingRequestsCount} />;
             default:
                 return null;
         }
     };
 
     return (
-        <PartyProvider partyId={partyId}>
-            <div className="container mx-auto p-4 md:p-6 lg:p-8 h-full">
-                {/* Tab Navigation */}
-                <div className="border-b border-gray-200">
-                    <nav className="-mb-px flex space-x-8">
-                        <button
-                            onClick={() => setActiveTab('info')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            Party Info
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('upload')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            Upload Receipts
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('receipts')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            Receipts
-                        </button>
-                    </nav>
-                </div>
-
-                {/* Tab Content */}
-                <div className="mt-8">
-                    {renderTabContent()}
-                </div>
+        <div className="container mx-auto p-4 md:p-6 lg:p-8 h-full">
+            {/* Tab Navigation */}
+            <div className="border-b border-gray-200">
+                <nav className="-mb-px flex space-x-8">
+                    <button
+                        onClick={() => setActiveTab('info')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        Party Info
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('upload')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        Upload Receipts
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('receipts')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        <div className="flex items-center space-x-2">
+                            <span>Receipts</span>
+                            {receipts.length > 0 && (
+                                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                                    {receipts.length}
+                                </span>
+                            )}
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('requests')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'requests'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        <div className="flex items-center space-x-2">
+                            <span>Requests</span>
+                            {pendingRequestsCount > 0 && (
+                                <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                                    {pendingRequestsCount}
+                                </span>
+                            )}
+                        </div>
+                    </button>
+                </nav>
             </div>
+
+            {/* Tab Content */}
+            <div className="mt-8">
+                {renderTabContent()}
+            </div>
+        </div>
+    );
+};
+
+const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
+    return (
+        <PartyProvider partyId={partyId}>
+            <SinglePartyContent partyId={partyId} />
         </PartyProvider>
     );
 };

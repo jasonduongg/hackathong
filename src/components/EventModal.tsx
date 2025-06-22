@@ -63,11 +63,12 @@ interface EventModalProps {
     creatorName: string;
     isOpen: boolean;
     onClose: () => void;
-    onEventUpdated?: (event: RestaurantEvent) => void;
+    onEventUpdated?: (event: RestaurantEvent | undefined) => void;
     openToAvailability?: boolean;
+    upcomingEvents?: any[];
 }
 
-export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated, openToAvailability }) => {
+export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated, openToAvailability, upcomingEvents }) => {
     const [showAvailability, setShowAvailability] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
     const [commonTimes, setCommonTimes] = useState<any>(null);
@@ -192,9 +193,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
             }
 
             // Call the callback to update the parent component
-            if (onEventUpdated) {
-                onEventUpdated(updatedEvent);
-            }
+            notifyParentOfChange(updatedEvent);
 
             // Close the availability view
             setShowAvailability(false);
@@ -238,6 +237,81 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
             });
         } catch (error) {
             return 'Invalid date';
+        }
+    };
+
+    // Add this function to call after scheduling or deleting
+    const notifyParentOfChange = (updatedEvent?: any) => {
+        if (onEventUpdated) {
+            onEventUpdated(updatedEvent);
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!confirm('Are you sure you want to delete this restaurant event? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/events', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ eventId: event.id })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete event');
+            }
+
+            // Call the callback to notify parent of the change
+            notifyParentOfChange(undefined);
+
+            // Close the modal
+            onClose();
+
+            alert('Event deleted successfully');
+        } catch (error) {
+            console.error('Error deleting event:', error);
+            alert('Failed to delete event. Please try again.');
+        }
+    };
+
+    const handleUnscheduleEvent = async () => {
+        if (!confirm('Are you sure you want to unschedule this event? The event will remain but will no longer have a scheduled time.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/events', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    eventId: event.id,
+                    scheduledTime: null
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to unschedule event');
+            }
+
+            // Call the callback to notify parent of the change
+            notifyParentOfChange({
+                ...event,
+                scheduledTime: undefined
+            });
+
+            // Close the modal
+            onClose();
+
+            alert('Event unscheduled successfully');
+        } catch (error) {
+            console.error('Error unscheduling event:', error);
+            alert('Failed to unschedule event. Please try again.');
         }
     };
 
@@ -288,6 +362,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                     chainName: event.restaurantData.restaurant?.chainName || undefined
                                 }}
                                 onConfirmSelection={handleConfirmSelection}
+                                upcomingEvents={upcomingEvents}
                             />
                         </div>
                     </div>
@@ -430,16 +505,27 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="ml-4">
+                                        <div className="ml-6 flex flex-col space-y-2">
                                             <button
                                                 onClick={() => setShowAvailability(true)}
-                                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+                                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 whitespace-nowrap"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
                                                 {event.scheduledTime ? 'Reschedule' : 'Schedule Event'}
                                             </button>
+                                            {event.scheduledTime && (
+                                                <button
+                                                    onClick={handleUnscheduleEvent}
+                                                    className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    Unschedule
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -455,12 +541,20 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                                 {event.scheduledTime.day} at {event.scheduledTime.startTime} - {event.scheduledTime.endTime}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() => setShowAvailability(true)}
-                                            className="text-green-600 hover:text-green-800 text-sm underline"
-                                        >
-                                            Change
-                                        </button>
+                                        <div className="flex items-center space-x-3">
+                                            <button
+                                                onClick={() => setShowAvailability(true)}
+                                                className="text-green-600 hover:text-green-800 text-sm underline font-medium"
+                                            >
+                                                Change
+                                            </button>
+                                            <button
+                                                onClick={handleUnscheduleEvent}
+                                                className="text-yellow-600 hover:text-yellow-800 text-sm underline font-medium"
+                                            >
+                                                Unschedule
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -524,6 +618,19 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                     <p className="text-sm font-medium text-gray-700">Updated</p>
                                     <p className="text-gray-900">{formatDate(event.updatedAt)}</p>
                                 </div>
+                            </div>
+                            
+                            {/* Delete Button */}
+                            <div className="mt-4 pt-4 border-t border-yellow-200">
+                                <button
+                                    onClick={handleDeleteEvent}
+                                    className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Delete Event
+                                </button>
                             </div>
                         </div>
                     </div>

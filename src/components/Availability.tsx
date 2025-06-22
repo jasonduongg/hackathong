@@ -18,6 +18,7 @@ interface AvailabilityProps {
     fetchMemberMetadata: () => void;
     selectedRestaurant?: RestaurantInfo | null;
     onConfirmSelection?: (restaurant: RestaurantInfo, selectedTimeSlot: { day: string; hour: string } | null) => void;
+    upcomingEvents?: any[];
 }
 
 interface TimeSlot {
@@ -33,9 +34,49 @@ const Availability: React.FC<AvailabilityProps> = ({
     commonTimes, 
     fetchMemberMetadata, 
     selectedRestaurant,
-    onConfirmSelection 
+    onConfirmSelection,
+    upcomingEvents
 }) => {
     const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ day: string; hour: string } | null>(null);
+
+    // Function to check if a time slot is already scheduled
+    const isTimeSlotScheduled = (day: string, hour: string) => {
+        if (!upcomingEvents || upcomingEvents.length === 0) return false;
+        
+        return upcomingEvents.some(event => {
+            if (!event.scheduledTime) return false;
+            
+            // Check if the event is scheduled for this exact day
+            if (event.scheduledTime.day !== day) return false;
+            
+            // Parse start and end times
+            const startTime = event.scheduledTime.startTime;
+            const endTime = event.scheduledTime.endTime;
+            
+            if (!startTime) return false;
+            
+            // Convert time strings to hours (e.g., "1:00 PM" -> 13, "1:00 AM" -> 1)
+            const parseTimeToHour = (timeStr: string) => {
+                const time = timeStr.toLowerCase();
+                const isPM = time.includes('pm');
+                const timeMatch = time.match(/(\d+):(\d+)/);
+                
+                if (!timeMatch) return 0;
+                
+                let hour = parseInt(timeMatch[1]);
+                if (isPM && hour !== 12) hour += 12;
+                if (!isPM && hour === 12) hour = 0;
+                
+                return hour;
+            };
+            
+            const eventStartHour = parseTimeToHour(startTime);
+            const eventEndHour = endTime ? parseTimeToHour(endTime) : eventStartHour + 1;
+            
+            // Check if the current hour falls within the event's time range
+            return parseInt(hour) >= eventStartHour && parseInt(hour) < eventEndHour;
+        });
+    };
 
     const handleTimeSlotSelect = (day: string, hour: string) => {
         // If clicking the same slot, deselect it
@@ -215,20 +256,41 @@ const Availability: React.FC<AvailabilityProps> = ({
                                         <div className="mb-4">
                                             <h5 className="font-medium text-gray-700 mb-3">Select a 1-Hour Time Slot:</h5>
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                                {day.timeSlots?.map((slot: TimeSlot, slotIndex: number) => (
-                                                    <button
-                                                        key={slotIndex}
-                                                        onClick={() => handleTimeSlotSelect(day.day, slot.hour)}
-                                                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
-                                                            isSlotSelected(day.day, slot.hour)
-                                                                ? 'bg-blue-500 text-white border-blue-500'
-                                                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
-                                                        }`}
-                                                    >
-                                                        <div className="font-semibold">{slot.startTime}</div>
-                                                        <div className="text-xs opacity-75">to {slot.endTime}</div>
-                                                    </button>
-                                                ))}
+                                                {day.timeSlots?.map((slot: TimeSlot, slotIndex: number) => {
+                                                    const isScheduled = isTimeSlotScheduled(day.day, slot.hour);
+                                                    
+                                                    // Skip rendering if this slot is scheduled
+                                                    if (isScheduled) {
+                                                        return (
+                                                            <div
+                                                                key={slotIndex}
+                                                                className="p-3 rounded-lg border-2 text-sm font-medium bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed flex items-center justify-center"
+                                                                title={`Scheduled event at ${slot.startTime}`}
+                                                            >
+                                                                <div className="text-center">
+                                                                    <div className="font-semibold">{slot.startTime}</div>
+                                                                    <div className="text-xs opacity-75">to {slot.endTime}</div>
+                                                                    <div className="text-xs text-gray-500 mt-1">Scheduled</div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    
+                                                    return (
+                                                        <button
+                                                            key={slotIndex}
+                                                            onClick={() => handleTimeSlotSelect(day.day, slot.hour)}
+                                                            className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
+                                                                isSlotSelected(day.day, slot.hour)
+                                                                    ? 'bg-blue-500 text-white border-blue-500'
+                                                                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300 hover:bg-blue-50'
+                                                            }`}
+                                                        >
+                                                            <div className="font-semibold">{slot.startTime}</div>
+                                                            <div className="text-xs opacity-75">to {slot.endTime}</div>
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
 

@@ -7,9 +7,9 @@ import { parseStructuredVideoData } from '@/lib/prompts';
 function calculateStringSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
-    
+
     if (longer.length === 0) return 1.0;
-    
+
     const distance = levenshteinDistance(longer, shorter);
     return (longer.length - distance) / longer.length;
 }
@@ -17,15 +17,15 @@ function calculateStringSimilarity(str1: string, str2: string): number {
 // Levenshtein distance calculation
 function levenshteinDistance(str1: string, str2: string): number {
     const matrix = [];
-    
+
     for (let i = 0; i <= str2.length; i++) {
         matrix[i] = [i];
     }
-    
+
     for (let j = 0; j <= str1.length; j++) {
         matrix[0][j] = j;
     }
-    
+
     for (let i = 1; i <= str2.length; i++) {
         for (let j = 1; j <= str1.length; j++) {
             if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
@@ -39,20 +39,20 @@ function levenshteinDistance(str1: string, str2: string): number {
             }
         }
     }
-    
+
     return matrix[str2.length][str1.length];
 }
 
 // Optimized restaurant deduction with early exit
 async function performOptimizedRestaurantDeduction(
-    filteredPlaces: string[], 
-    structuredData: any, 
-    captionText?: string, 
-    accountMentions?: string, 
-    locationTags?: string, 
+    filteredPlaces: string[],
+    structuredData: any,
+    captionText?: string,
+    accountMentions?: string,
+    locationTags?: string,
     hashtags?: string
 ): Promise<{ deducedRestaurant: string | null; restaurantDetails: any; uniqueRestaurantNames: string[]; hasMultipleRestaurants: boolean }> {
-    
+
     // Early exit if no places found
     if (filteredPlaces.length === 0) {
         return {
@@ -65,29 +65,29 @@ async function performOptimizedRestaurantDeduction(
 
     // Quick business name filtering
     const businessKeywords = [
-        'restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco', 
+        'restaurant', 'cafe', 'bistro', 'diner', 'grill', 'kitchen', 'bar', 'pizza', 'taco',
         'burger', 'sushi', 'coffee', 'bakery', 'deli', 'food', 'eat', 'dining', 'shack',
         'mcdonalds', 'starbucks', 'chipotle', 'subway', 'kfc', 'pizza hut', 'dominos',
         'burger king', 'wendys', 'taco bell', 'shake shack', 'five guys', 'in-n-out'
     ];
-    
+
     // Filter out generic descriptions and keep only actual business names
     const actualBusinessPlaces = filteredPlaces.filter(place => {
         const lowerPlace = place.toLowerCase();
-        
+
         // Reject generic descriptions
-        if (lowerPlace.includes('restaurant referenced by') || 
+        if (lowerPlace.includes('restaurant referenced by') ||
             lowerPlace.includes('restaurant mentioned') ||
             lowerPlace.includes('food establishment') ||
             lowerPlace.includes('restaurant') && !businessKeywords.some(keyword => lowerPlace.includes(keyword))) {
             return false;
         }
-        
+
         // Keep if it contains business keywords or looks like an actual name
-        return businessKeywords.some(keyword => lowerPlace.includes(keyword)) || 
-               (place.length > 2 && place.length < 50 && !place.includes(' '));
+        return businessKeywords.some(keyword => lowerPlace.includes(keyword)) ||
+            (place.length > 2 && place.length < 50 && !place.includes(' '));
     });
-    
+
     // If no actual business names found, try to extract from account mentions
     let placesToAnalyze = actualBusinessPlaces;
     if (actualBusinessPlaces.length === 0 && accountMentions) {
@@ -95,20 +95,20 @@ async function performOptimizedRestaurantDeduction(
         const businessMentions = mentions.filter(mention => {
             const cleanMention = mention.replace('@', '').toLowerCase();
             // Look for mentions that could be business names
-            return cleanMention.length > 3 && 
-                   (businessKeywords.some(keyword => cleanMention.includes(keyword)) ||
-                    cleanMention.includes('cali') || 
+            return cleanMention.length > 3 &&
+                (businessKeywords.some(keyword => cleanMention.includes(keyword)) ||
+                    cleanMention.includes('cali') ||
                     cleanMention.includes('spartan') ||
                     cleanMention.includes('burger') ||
                     cleanMention.includes('taco') ||
                     cleanMention.includes('pizza'));
         });
-        
+
         if (businessMentions.length > 0) {
             placesToAnalyze = businessMentions.map(m => m.replace('@', ''));
         }
     }
-    
+
     // If still no places, use the original filtered places but clean them up
     if (placesToAnalyze.length === 0) {
         placesToAnalyze = filteredPlaces.map(place => {
@@ -120,11 +120,9 @@ async function performOptimizedRestaurantDeduction(
             return place;
         }).filter(place => place.length > 2 && place.length < 50);
     }
-    
+
     const uniqueRestaurantNames = [...new Set(placesToAnalyze)];
     const hasMultipleRestaurants = uniqueRestaurantNames.length > 1;
-    
-    // If only one restaurant found, get detailed information
     if (uniqueRestaurantNames.length === 1) {
         const restaurantName = uniqueRestaurantNames[0];
         
@@ -148,8 +146,6 @@ async function performOptimizedRestaurantDeduction(
             hasMultipleRestaurants: false
         };
     }
-    
-    // For multiple restaurants, get details for the primary one
     if (hasMultipleRestaurants) {
         const primaryRestaurant = placesToAnalyze[0];
         
@@ -173,7 +169,7 @@ async function performOptimizedRestaurantDeduction(
             hasMultipleRestaurants: true
         };
     }
-    
+
     // Fallback to first place name or null
     const fallbackRestaurant = placesToAnalyze[0];
     if (fallbackRestaurant) {
@@ -224,13 +220,13 @@ export async function POST(request: NextRequest) {
         const analysisMode = formData.get('analysisMode') as string;
         const videoDuration = formData.get('videoDuration') as string;
 
-        console.log('Processing request:', { 
-            hasUrl: !!url, 
+        console.log('Processing request:', {
+            hasUrl: !!url,
             hasVideoFile: !!videoFile,
             hasImageFile: !!imageFile,
             imageCount: images.length,
-            frameCount: frames.length, 
-            promptType, 
+            frameCount: frames.length,
+            promptType,
             provider,
             analysisMode,
             hasCaptionText: !!captionText,
@@ -253,7 +249,7 @@ export async function POST(request: NextRequest) {
         // Handle multiple images (Instagram screenshots) - OPTIMIZED
         if (images && images.length > 0) {
             console.log(`Processing ${images.length} Instagram screenshots`);
-            
+
             // Validate all files are images
             for (const img of images) {
                 if (!img.type.startsWith('image/')) {
@@ -263,9 +259,9 @@ export async function POST(request: NextRequest) {
                     );
                 }
             }
-            
+
             // Process multiple images with enhanced context
-            const enhancedCaption = captionText ? 
+            const enhancedCaption = captionText ?
                 `Caption: ${captionText}\n` : '';
             const enhancedContext = [
                 enhancedCaption,
@@ -275,7 +271,7 @@ export async function POST(request: NextRequest) {
                 videoDuration ? `Video duration: ${videoDuration} seconds\n` : '',
                 `This is a series of ${images.length} screenshots from an Instagram video. Analyze all screenshots together to provide a comprehensive understanding of the content.`
             ].filter(Boolean).join('');
-            
+
             // Process all images together
             llmResponse = await processMultipleImages(images, promptType, enhancedContext);
         }
@@ -357,7 +353,7 @@ export async function POST(request: NextRequest) {
         // OPTIMIZED: Only enhance place names if we have them and they're not empty
         let enhancedPlaces: any[] = [];
         let filteredPlaces: string[] = [];
-        
+
         if (structuredData.place_names && structuredData.place_names.length > 0) {
             console.log('Enhancing place names with search validation...');
             const enhancementResult = await enhancePlaceNamesWithSearch(
@@ -395,18 +391,18 @@ export async function POST(request: NextRequest) {
                 return null;
             }
         });
-        
+
         const geocodedPlaces = (await Promise.all(geocodingPromises)).filter(Boolean);
 
         // OPTIMIZED: Simplified restaurant deduction
         console.log('Performing optimized restaurant deduction...');
-        const { deducedRestaurant, restaurantDetails, uniqueRestaurantNames, hasMultipleRestaurants } = 
+        const { deducedRestaurant, restaurantDetails, uniqueRestaurantNames, hasMultipleRestaurants } =
             await performOptimizedRestaurantDeduction(
-                filteredPlaces, 
-                structuredData, 
-                captionText, 
-                accountMentions, 
-                locationTags, 
+                filteredPlaces,
+                structuredData,
+                captionText,
+                accountMentions,
+                locationTags,
                 hashtags
             );
 

@@ -166,14 +166,14 @@ export function HeroSection() {
                                     <div className="overflow-hidden rounded-2xl">
                                         <img
                                             className="bg-background aspect-15/8 relative hidden w-full object-cover dark:block"
-                                            src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2700&q=80"
+                                            src="/assets/mock-2.png"
                                             alt="Travel app screen"
                                             width="2700"
                                             height="1440"
                                         />
                                         <img
                                             className="z-2 border-border/25 aspect-15/8 relative w-full object-cover rounded-2xl border dark:hidden"
-                                            src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2700&q=80"
+                                            src="/assets/mock-2.png"
                                             alt="Travel app screen"
                                             width="2700"
                                             height="1440"
@@ -212,7 +212,7 @@ const HeroHeader = () => {
             <nav
                 data-state={menuState && 'active'}
                 className="fixed z-20 w-full px-2 group">
-                <div className={cn('mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12', isScrolled && 'bg-background/50 max-w-4xl rounded-full border backdrop-blur-lg lg:px-5')}>
+                <div className={cn('mx-auto mt-2 max-w-7xl px-6 transition-all duration-300 lg:px-12', isScrolled && 'bg-background/50 max-w-6xl rounded-full border backdrop-blur-lg lg:px-5')}>
                     <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
                         <div className="flex w-full justify-between lg:w-auto">
                             <Link

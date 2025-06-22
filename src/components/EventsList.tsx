@@ -84,7 +84,11 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
             }
 
             const data = await response.json();
-            setEvents(data.events);
+            // Sort events by creation date (newest first)
+            const sortedEvents = data.events.sort((a: RestaurantEvent, b: RestaurantEvent) => {
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            });
+            setEvents(sortedEvents);
         } catch (error) {
             console.error('Error fetching events:', error);
             setError('Failed to load events');

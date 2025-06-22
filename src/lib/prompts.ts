@@ -1,3 +1,4 @@
+
 // TypeScript interfaces for structured video analysis
 export interface StructuredVideoData {
     place_names: string[];

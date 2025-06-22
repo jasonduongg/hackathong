@@ -47,6 +47,8 @@ export interface UserProfile {
     website?: string;
     // Party management
     partyIds?: string[];
+    // PayPal email for receiving payments
+    paypalEmail?: string;
 }
 
 // Create a new user profile
@@ -120,6 +122,28 @@ export const getUsersByEmail = async (email: string): Promise<UserProfile[]> => 
     querySnapshot.forEach((doc) => {
         users.push(doc.data() as UserProfile);
     });
+
+    return users;
+};
+
+// Get multiple user profiles by UIDs
+export const getUserProfilesByIds = async (uids: string[]): Promise<UserProfile[]> => {
+    if (uids.length === 0) return [];
+
+    const users: UserProfile[] = [];
+
+    // Firestore doesn't support 'in' queries with more than 10 items, so we need to batch them
+    const batchSize = 10;
+    for (let i = 0; i < uids.length; i += batchSize) {
+        const batch = uids.slice(i, i + batchSize);
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', 'in', batch));
+        const querySnapshot = await getDocs(q);
+
+        querySnapshot.forEach((doc) => {
+            users.push(doc.data() as UserProfile);
+        });
+    }
 
     return users;
 }; 

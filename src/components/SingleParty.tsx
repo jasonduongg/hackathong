@@ -22,6 +22,7 @@ import { PartyDetails } from '@/types/party';
 import { NearestRestaurantFinder } from './NearestRestaurantFinder';
 import ChainLocationFinder from './ChainLocationFinder';
 import ChooseRestaurant from './ChooseRestaurant';
+import Availability from './Availability';
 
 interface SinglePartyProps {
     partyId: string;
@@ -37,7 +38,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'choose-restaurant' | 'upload' | 'receipts' | 'requests';
+type TabType = 'info' | 'choose-restaurant' | 'upload' | 'receipts' | 'availability' | 'requests';
 
 // Inner component that uses the PartyContext
 const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
@@ -67,6 +68,60 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [chainLocationData, setChainLocationData] = useState<any>(null);
     const [commonTimes, setCommonTimes] = useState<any>(null);
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
+    const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
+
+    const fetchMemberMetadata = async () => {
+        if (!partyId) return;
+
+        try {
+            setLoadingMetadata(true);
+            const response = await fetch(`/api/get-members?partyId=${partyId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                setMemberMetadata(data);
+                
+                // Now call the get-times API to find common availability times
+                await fetchCommonTimes(data.memberProfiles);
+            } else {
+                console.error('Failed to fetch member metadata:', data.error);
+                alert('Failed to fetch member metadata');
+            }
+        } catch (error) {
+            console.error('Error fetching member metadata:', error);
+        } finally {
+            setLoadingMetadata(false);
+        }
+    };
+
+    const fetchCommonTimes = async (memberProfiles: any[]) => {
+        if (!memberProfiles || memberProfiles.length === 0) return;
+
+        try {
+            setLoadingCommonTimes(true);
+            const response = await fetch('/api/get-times', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    memberProfiles: memberProfiles
+                })
+            });
+            
+            const data = await response.json();
+
+            if (data.success) {
+                setCommonTimes(data);
+            } else {
+                console.error('Failed to fetch common times:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching common times:', error);
+        } finally {
+            setLoadingCommonTimes(false);
+        }
+    };
 
     const fetchPendingRequestsCount = async () => {
         try {
@@ -133,9 +188,36 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         if (partyId) {
             fetchPartyDetails();
             fetchPendingInvitations();
+            fetchMemberMetadata();
             fetchPendingRequestsCount();
         }
     }, [partyId, user]);
+
+    useEffect(() => {
+        if (memberProfiles && memberProfiles.length > 0) {
+            const allDietaryRestrictions = new Set<string>();
+            const allFoodPreferences = new Set<string>();
+            const allActivityPreferences = new Set<string>();
+
+            memberProfiles.forEach(profile => {
+                profile.dietaryRestrictions?.forEach(restriction =>
+                    allDietaryRestrictions.add(restriction)
+                );
+                profile.foodPreferences?.forEach(preference =>
+                    allFoodPreferences.add(preference)
+                );
+                profile.activityPreferences?.forEach(preference =>
+                    allActivityPreferences.add(preference)
+                );
+            });
+
+            setAggregatedPreferences({
+                dietaryRestrictions: Array.from(allDietaryRestrictions),
+                foodPreferences: Array.from(allFoodPreferences),
+                activityPreferences: Array.from(allActivityPreferences)
+            });
+        }
+    }, [memberProfiles]);
 
     // Helper function to get background color for initials
     const getInitialColor = (uid: string) => {
@@ -243,59 +325,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         }
     };
 
-    const fetchMemberMetadata = async () => {
-        if (!partyId) return;
-
-        try {
-            setLoadingMetadata(true);
-            const response = await fetch(`/api/get-members?partyId=${partyId}`);
-            const data = await response.json();
-
-            if (data.success) {
-                setMemberMetadata(data);
-                
-                // Now call the get-times API to find common availability times
-                await fetchCommonTimes(data.memberProfiles);
-            } else {
-                console.error('Failed to fetch member metadata:', data.error);
-                alert('Failed to fetch member metadata');
-            }
-        } catch (error) {
-            console.error('Error fetching member metadata:', error);
-        } finally {
-            setLoadingMetadata(false);
-        }
-    };
-
-    const fetchCommonTimes = async (memberProfiles: any[]) => {
-        if (!memberProfiles || memberProfiles.length === 0) return;
-
-        try {
-            setLoadingCommonTimes(true);
-            const response = await fetch('/api/get-times', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    memberProfiles: memberProfiles
-                })
-            });
-            
-            const data = await response.json();
-
-            if (data.success) {
-                setCommonTimes(data);
-            } else {
-                console.error('Failed to fetch common times:', data.error);
-            }
-        } catch (error) {
-            console.error('Error fetching common times:', error);
-        } finally {
-            setLoadingCommonTimes(false);
-        }
-    };
-
     const handleRestaurantFound = (data: any) => {
         setRestaurantFinderData(data);
         console.log('Restaurant found:', data);
@@ -379,27 +408,99 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
 
                         {/* Members Section */}
                         <div className="mb-6">
-                            <h3 className="text-lg font-medium text-gray-900 mb-3">Members ({memberProfiles.length})</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                {memberProfiles.map((profile) => (
-                                    <div key={profile.uid} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getInitialColor(profile.uid)}`}>
-                                            <span className="text-sm font-medium text-white">
-                                                {getInitial(profile)}
-                                            </span>
+                            <h3 className="text-lg font-medium text-gray-900 mb-3">
+                                Members ({memberProfiles.length}/4)
+                            </h3>
+                            <div className="space-y-3">
+                                {memberProfiles.map((profile) => {
+                                    const display = getUserDisplay(profile);
+                                    return (
+                                        <div key={profile.uid} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center">
+                                                {display.type === 'image' ? (
+                                                    <img
+                                                        src={display.value}
+                                                        alt={profile.displayName || 'Member'}
+                                                        className="w-full h-full rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className={`w-full h-full rounded-full flex items-center justify-center text-white text-sm font-medium ${getInitialColor(profile.uid)}`}>
+                                                        {display.value}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-gray-900">
+                                                    {profile.displayName || 'Unknown User'}
+                                                </p>
+                                                <p className="text-xs text-gray-500">{profile.email}</p>
+                                            </div>
+                                            {profile.uid === party.createdBy && (
+                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                    Creator
+                                                </span>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-900">
-                                                {profile.displayName || profile.email?.split('@')[0] || 'Unknown'}
-                                            </p>
-                                            <p className="text-xs text-gray-500">{profile.email}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                                {memberProfiles.length === 0 && (
+                                    <p className="text-gray-500 text-center py-4">No members found</p>
+                                )}
                             </div>
                         </div>
 
-                        {/* Pending Invitations */}
+                        {/* Group Preferences */}
+                        {aggregatedPreferences && (
+                            <div className="bg-blue-50 rounded-lg p-4 mt-6">
+                                <h3 className="text-lg font-medium text-blue-900 mb-3">Group Preferences</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <h4 className="font-medium text-blue-800 mb-2">Dietary Restrictions</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {aggregatedPreferences.dietaryRestrictions?.length > 0 ? (
+                                                aggregatedPreferences.dietaryRestrictions.map((restriction: string, i: number) => (
+                                                    <span key={i} className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full">
+                                                        {restriction}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-blue-600">None specified</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-medium text-blue-800 mb-2">Food Preferences</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {aggregatedPreferences.foodPreferences?.length > 0 ? (
+                                                aggregatedPreferences.foodPreferences.map((preference: string, i: number) => (
+                                                    <span key={i} className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                                                        {preference}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-blue-600">None specified</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-medium text-blue-800 mb-2">Activity Preferences</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {aggregatedPreferences.activityPreferences?.length > 0 ? (
+                                                aggregatedPreferences.activityPreferences.map((preference: string, i: number) => (
+                                                    <span key={i} className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                                                        {preference}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-blue-600">None specified</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Pending Invitations Bar */}
                         {pendingInvitations.length > 0 && (
                             <div className="mb-6">
                                 <h3 className="text-lg font-medium text-gray-900 mb-3">Pending Invitations ({pendingInvitations.length})</h3>
@@ -547,6 +648,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 );
             case 'receipts':
                 return <PartyReceipts partyId={partyId} memberProfiles={memberProfiles} />;
+            case 'availability':
+                return (
+                    <Availability
+                        loadingMetadata={loadingMetadata}
+                        commonTimes={commonTimes}
+                        fetchMemberMetadata={fetchMemberMetadata}
+                    />
+                );
             case 'requests':
                 return <PartyPaymentRequests partyId={partyId} memberProfiles={memberProfiles} onRequestsUpdate={setPendingRequestsCount} />;
             default:
@@ -577,6 +686,15 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     >
                         Choose Restaurant
                     </button>
+                        <button
+                            onClick={() => setActiveTab('availability')}
+                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'availability'
+                                ? 'border-indigo-500 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                        >
+                            Availability
+                        </button>
                     <button
                         onClick={() => setActiveTab('upload')}
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
@@ -744,52 +862,52 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                         </div>
                                     </div>
 
-                                    {/* Common Times Section */}
-                                    {loadingCommonTimes ? (
-                                        <div className="bg-yellow-50 rounded-lg p-4">
-                                            <h4 className="text-md font-medium text-yellow-900 mb-2">Common Availability Times</h4>
-                                            <div className="text-center py-4">
-                                                <div className="text-lg text-yellow-700">Finding common times...</div>
-                                            </div>
-                                        </div>
-                                    ) : commonTimes ? (
-                                        <div className="bg-green-50 rounded-lg p-4">
-                                            <h4 className="text-md font-medium text-green-900 mb-2">Common Availability Times</h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
-                                                <div>
-                                                    <span className="font-medium text-green-800">Total Available Slots:</span> {commonTimes.totalSlots}
-                                                </div>
-                                                <div>
-                                                    <span className="font-medium text-green-800">Days with Common Times:</span> {commonTimes.commonTimes.length}
-                                                </div>
-                                            </div>
-                                            
-                                            {commonTimes.commonTimes.length > 0 ? (
-                                                <div className="space-y-3">
-                                                    {commonTimes.commonTimes.map((day: any, index: number) => (
-                                                        <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <h5 className="font-medium text-green-800 capitalize">{day.day}</h5>
-                                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                                                    {day.slotCount} slots
-                                                                </span>
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                {day.timeRanges.map((range: string, rangeIndex: number) => (
-                                                                    <div key={rangeIndex} className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
-                                                                        {range}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
+                                        {/* Common Times Section */}
+                                        {loadingCommonTimes ? (
+                                            <div className="bg-yellow-50 rounded-lg p-4">
+                                                <h4 className="text-md font-medium text-yellow-900 mb-2">Common Availability Times</h4>
                                                 <div className="text-center py-4">
-                                                    <div className="text-lg text-green-700">No common times found</div>
-                                                    <div className="text-sm text-green-600 mt-1">All members need to be available at the same time</div>
+                                                    <div className="text-lg text-yellow-700">Finding common times...</div>
                                                 </div>
-                                            )}
+                                            </div>
+                                        ) : commonTimes ? (
+                                            <div className="bg-green-50 rounded-lg p-4">
+                                                <h4 className="text-md font-medium text-green-900 mb-2">Common Availability Times</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
+                                                    <div>
+                                                        <span className="font-medium text-green-800">Total Available Hours:</span> {commonTimes.totalAvailableHours}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium text-green-800">Days with Common Times:</span> {commonTimes.commonTimes.length}
+                                                    </div>
+                                                </div>
+                                                
+                                                {commonTimes.commonTimes.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {commonTimes.commonTimes.map((day: any, index: number) => (
+                                                            <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <h5 className="font-medium text-green-800 capitalize">{day.day}</h5>
+                                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                                        {day.hourCount} hours
+                                                                    </span>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    {day.timeRanges.map((range: string, rangeIndex: number) => (
+                                                                        <div key={rangeIndex} className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
+                                                                            {range}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-4">
+                                                        <div className="text-lg text-green-700">No common times found</div>
+                                                        <div className="text-sm text-green-600 mt-1">All members need to be available at the same time</div>
+                                                    </div>
+                                                )}
 
                                             {/* Aggregated Preferences */}
                                             {commonTimes.aggregatedPreferences && (
@@ -852,7 +970,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                                         <div>
                                                             <span className="font-medium text-gray-700">Job:</span> {member.job || 'Not specified'}
                                                         </div>
-
                                                         <div>
                                                             <span className="font-medium text-gray-700">Dietary Restrictions:</span>
                                                             <div className="mt-1">
@@ -950,4 +1067,4 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     );
 };
 
-export default SingleParty; 
+export default SingleParty;

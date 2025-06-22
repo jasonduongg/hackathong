@@ -151,7 +151,6 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                 alert('Party cannot exceed 4 people');
                 return;
             }
-
             await createInvitation({
                 partyId: party.id,
                 partyName: party.name,

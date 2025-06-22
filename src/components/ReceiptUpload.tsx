@@ -106,7 +106,7 @@ const ReceiptUpload: React.FC = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="space-y-6">
             <div className="text-center">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                     Receipt Analyzer
@@ -118,7 +118,7 @@ const ReceiptUpload: React.FC = () => {
 
             {/* Upload Area */}
             <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragOver
+                className={`max-w-4xl mx-auto p-6 rounded-lg text-center transition-colors ${isDragOver
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
                     }`}

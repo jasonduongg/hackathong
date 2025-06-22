@@ -104,6 +104,13 @@ export async function POST(request: NextRequest) {
               
               IMPORTANT: Only extract information that is clearly visible and readable on the receipt. Do not guess, estimate, or hallucinate any values. If information is unclear, blurry, or not visible, mark it as "N/A".
               
+              PRICE READING ACCURACY (CRITICAL):
+              - Carefully examine each price digit by digit, especially for expensive items
+              - Large amounts (thousands of dollars) are valid and should be read exactly as shown
+              - Do not assume prices are "too high" - read them exactly as they appear
+              - Pay special attention to decimal points and commas in large numbers
+              - If a price looks unusual, double-check your reading but do not change it arbitrarily
+              
               ITEM EXTRACTION RULES:
               1.  **Line Item:** Each line with a price is a distinct item. Extract it as is.
               2.  **Quantity and Price:** For a line like "2 Cheeseburger ... 7.70", the quantity is "2" and the price is "7.70". You MUST extract the total line price (7.70), not the per-unit price. The backend will calculate the per-unit price.

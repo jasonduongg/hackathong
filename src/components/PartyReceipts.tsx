@@ -1,26 +1,31 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Receipt, DollarSign, Calendar, Store, Eye, Trash2, X, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Receipt, DollarSign, Calendar, Store, Eye, Trash2, X, Image as ImageIcon, RefreshCw, Users } from 'lucide-react';
 import { useParty } from '@/contexts/PartyContext';
 import { PartyReceipt } from '@/types/receipt';
+import { UserProfile } from '@/lib/users';
+import ItemAssignmentFlow from './ItemAssignmentFlow';
 
 interface PartyReceiptsProps {
     partyId: string;
+    memberProfiles: UserProfile[];
 }
 
-const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
+const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId, memberProfiles }) => {
     const {
         receipts,
         loading,
         fetchReceipts,
-        removeReceipt
+        removeReceipt,
+        updateReceipt
     } = useParty();
 
     const [selectedReceipt, setSelectedReceipt] = React.useState<PartyReceipt | null>(null);
     const [showDetails, setShowDetails] = React.useState(false);
     const [showImage, setShowImage] = React.useState(false);
     const [showRawData, setShowRawData] = React.useState(false);
+    const [showAssignmentFlow, setShowAssignmentFlow] = React.useState(false);
     const [refreshingUrl, setRefreshingUrl] = React.useState<string | null>(null);
     const [deletingReceipt, setDeletingReceipt] = React.useState<string | null>(null);
 
@@ -121,6 +126,20 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
         setShowImage(true);
     };
 
+    const handleStartAssignment = (receipt: PartyReceipt) => {
+        setSelectedReceipt(receipt);
+        setShowAssignmentFlow(true);
+    };
+
+    const handleAssignmentComplete = (updatedReceipt: PartyReceipt) => {
+        // Update the receipt in the context
+        if (updateReceipt) {
+            updateReceipt(updatedReceipt);
+        }
+        setShowAssignmentFlow(false);
+        setShowDetails(false);
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-32">
@@ -168,6 +187,12 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
                                                     {formatDate(receipt.uploadedAt)} • {(receipt.fileSize / 1024 / 1024).toFixed(2)} MB
                                                 </p>
                                             </div>
+                                            {receipt.isAssigned && (
+                                                <div className="flex items-center space-x-1 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">
+                                                    <Users className="h-3 w-3" />
+                                                    <span>Assigned</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -204,6 +229,27 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
                                                             ...and {receipt.analysis.items.length - 3} more items
                                                         </p>
                                                     )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Assignment Summary */}
+                                        {receipt.isAssigned && receipt.memberAmounts && (
+                                            <div className="mt-3 pt-3 border-t border-gray-100">
+                                                <p className="text-sm text-gray-600 mb-2">Amounts owed:</p>
+                                                <div className="space-y-1">
+                                                    {Object.entries(receipt.memberAmounts).map(([userId, amount]) => {
+                                                        const member = memberProfiles.find(p => p.uid === userId);
+                                                        const displayName = member?.displayName || member?.email?.split('@')[0] || 'Unknown';
+                                                        return (
+                                                            <div key={userId} className="flex justify-between text-xs">
+                                                                <span className="text-gray-600">{displayName}</span>
+                                                                <span className="font-medium text-green-600">
+                                                                    {formatCurrency(amount.toString())}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -309,6 +355,13 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
                                         {showRawData ? 'Hide Raw Data' : 'Show Raw Data'}
                                     </button>
                                     <button
+                                        onClick={() => handleStartAssignment(selectedReceipt)}
+                                        className="px-3 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                                    >
+                                        <Users className="h-4 w-4" />
+                                        <span>{selectedReceipt.isAssigned ? 'Reassign' : 'Assign'}</span>
+                                    </button>
+                                    <button
                                         onClick={() => setShowDetails(false)}
                                         className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                                     >
@@ -387,12 +440,33 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
                                                             }
                                                         </div>
 
+                                                        {/* Assignment Info */}
+                                                        {item.assignedTo && item.assignedTo.length > 0 && (
+                                                            <div className="mt-2 p-2 bg-blue-50 rounded-lg">
+                                                                <p className="text-xs text-blue-700 mb-1">
+                                                                    Assigned to {item.assignedTo.length} {item.assignedTo.length === 1 ? 'person' : 'people'}:
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {item.assignedTo.map((userId) => {
+                                                                        const member = memberProfiles.find(p => p.uid === userId);
+                                                                        const displayName = member?.displayName || member?.email?.split('@')[0] || 'Unknown';
+                                                                        const amount = item.assignedAmounts?.[userId] || 0;
+                                                                        return (
+                                                                            <span key={userId} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                                                {displayName} ({formatCurrency(amount.toString())})
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
                                                         {item.subitems && item.subitems.length > 1 && (
                                                             <div className="pl-4 mt-3 space-y-2 text-sm text-gray-600">
                                                                 {item.subitems.map((subitem, subIndex) => (
                                                                     <div key={subIndex} className="flex justify-between items-center">
                                                                         <span>{subitem.name}</span>
-                                                                        {parseNum(subitem.tax_price) > 0 &&
+                                                                        {subitem.tax_price && parseNum(subitem.tax_price) > 0 &&
                                                                             <span className="text-xs">
                                                                                 Tax: {formatCurrency(subitem.tax_price)}
                                                                             </span>
@@ -478,6 +552,16 @@ const PartyReceipts: React.FC<PartyReceiptsProps> = ({ partyId }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Item Assignment Flow */}
+            {showAssignmentFlow && selectedReceipt && (
+                <ItemAssignmentFlow
+                    receipt={selectedReceipt}
+                    memberProfiles={memberProfiles}
+                    onClose={() => setShowAssignmentFlow(false)}
+                    onAssignmentComplete={handleAssignmentComplete}
+                />
             )}
         </div>
     );

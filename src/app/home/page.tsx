@@ -45,7 +45,7 @@ export default function HomePage() {
     // Check if user needs to complete onboarding
     if (userProfile && !userProfile.hasCompletedOnboarding && !showOnboarding) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 pt-20">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 pt-8">
                 <Navbar
                     onProfileClick={() => setShowProfile(true)}
                     onHomeClick={() => {

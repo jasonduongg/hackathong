@@ -8,6 +8,7 @@ interface PartyContextType {
     setReceipts: React.Dispatch<React.SetStateAction<PartyReceipt[]>>;
     addReceipt: (newReceipt: PartyReceipt) => void;
     removeReceipt: (receiptId: string) => void;
+    updateReceipt: (updatedReceipt: PartyReceipt) => void;
     loading: boolean;
     setLoading: React.Dispatch<React.SetStateAction<boolean>>;
     fetchReceipts: (partyId: string) => Promise<void>;
@@ -47,8 +48,14 @@ export const PartyProvider = ({ children, partyId }: { children: ReactNode, part
         setReceipts(prev => prev.filter(receipt => receipt.id !== receiptId));
     };
 
+    const updateReceipt = (updatedReceipt: PartyReceipt) => {
+        setReceipts(prev => prev.map(receipt =>
+            receipt.id === updatedReceipt.id ? updatedReceipt : receipt
+        ));
+    };
+
     return (
-        <PartyContext.Provider value={{ receipts, setReceipts, addReceipt, removeReceipt, loading, setLoading, fetchReceipts }}>
+        <PartyContext.Provider value={{ receipts, setReceipts, addReceipt, removeReceipt, updateReceipt, loading, setLoading, fetchReceipts }}>
             {children}
         </PartyContext.Provider>
     );

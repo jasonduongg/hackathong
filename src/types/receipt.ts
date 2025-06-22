@@ -15,6 +15,9 @@ export interface ReceiptItem {
     quantity?: string;
     subitems?: ReceiptSubItem[];
     total_tax_price?: string;
+    // Assignment fields
+    assignedTo?: string[]; // Array of user IDs assigned to this item
+    assignedAmounts?: { [userId: string]: number }; // Amount each person owes for this item
 }
 
 export interface ReceiptData {
@@ -40,4 +43,7 @@ export interface PartyReceipt {
     analysis: ReceiptData;
     rawResponse: string;
     uploadedAt: any;
+    // Assignment fields
+    isAssigned?: boolean; // Whether items have been assigned to people
+    memberAmounts?: { [userId: string]: number }; // Total amount each member owes
 } 

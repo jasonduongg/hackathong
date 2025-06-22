@@ -55,7 +55,7 @@ export default function RestaurantAnalyzer() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!url.trim()) {
             setError('Please enter a URL');
             return;
@@ -72,16 +72,16 @@ export default function RestaurantAnalyzer() {
         setError(null);
         setResult(null);
         setSelectedRestaurant(null);
-        setProgress({step: 'Starting analysis...', percentage: 0, details: ''});
+        setProgress({ step: 'Starting analysis...', percentage: 0, details: '' });
 
         try {
             const formData = new FormData();
-            
+
             const isInstagram = url.includes('instagram.com/p/');
-            
+
             if (isInstagram) {
-                setProgress({step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page'});
-                
+                setProgress({ step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page' });
+
                 const screenshotRes = await fetch('/api/screenshot-instagram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -91,7 +91,7 @@ export default function RestaurantAnalyzer() {
                 if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
                     throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
                 }
-                
+
                 setInstagramData({
                     screenshots: screenshotData.screenshots || [screenshotData.image],
                     captionText: screenshotData.captionText || '',
@@ -102,17 +102,17 @@ export default function RestaurantAnalyzer() {
                     screenshotCount: screenshotData.screenshotCount || 1,
                     videoDuration: screenshotData.videoDuration || 0
                 });
-                
-                const durationText = screenshotData.videoDuration > 0 
+
+                const durationText = screenshotData.videoDuration > 0
                     ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
                     : ` (${screenshotData.screenshotCount} screenshots)`;
-                
-                setProgress({step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully'});
-                
-                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 50, details: 'Preparing screenshots for AI analysis'});
-                
+
+                setProgress({ step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully' });
+
+                setProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 50, details: 'Preparing screenshots for AI analysis' });
+
                 const analysisFormData = new FormData();
-                
+
                 screenshotData.screenshots.forEach((screenshot: string, index: number) => {
                     const byteString = atob(screenshot);
                     const ab = new ArrayBuffer(byteString.length);
@@ -123,39 +123,39 @@ export default function RestaurantAnalyzer() {
                     const blob = new Blob([ab], { type: 'image/png' });
                     analysisFormData.append('images', blob, `instagram-screenshot-${index + 1}.png`);
                 });
-                
+
                 analysisFormData.append('promptType', 'structured');
                 analysisFormData.append('provider', 'anthropic');
                 analysisFormData.append('analysisMode', 'multi-screenshot');
-                
+
                 if (screenshotData.captionText) {
                     analysisFormData.append('captionText', screenshotData.captionText);
                 }
-                
+
                 if (screenshotData.accountMentions && screenshotData.accountMentions.length > 0) {
                     analysisFormData.append('accountMentions', screenshotData.accountMentions.join(', '));
                 }
-                
+
                 if (screenshotData.locationTags && screenshotData.locationTags.length > 0) {
                     analysisFormData.append('locationTags', screenshotData.locationTags.join(', '));
                 }
-                
+
                 if (screenshotData.hashtags && screenshotData.hashtags.length > 0) {
                     analysisFormData.append('hashtags', screenshotData.hashtags.join(', '));
                 }
-                
+
                 if (screenshotData.videoDuration > 0) {
                     analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
                 }
-                
-                setProgress({step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis'});
-                
+
+                setProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots with AI...`, percentage: 60, details: 'Sending to Claude for analysis' });
+
                 const response = await fetch('/api/process-video', {
                     method: 'POST',
                     body: analysisFormData
                 });
 
-                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
+                setProgress({ step: 'Processing results...', percentage: 90, details: 'Validating places and locations' });
 
                 const data = await response.json();
 
@@ -164,7 +164,7 @@ export default function RestaurantAnalyzer() {
                 }
 
                 if (data.structuredData) {
-                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
+                    setProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
                     const fullResult = {
                         ...data.structuredData,
                         deducedRestaurant: data.deducedRestaurant,
@@ -176,7 +176,7 @@ export default function RestaurantAnalyzer() {
                         hasMultipleRestaurants: data.hasMultipleRestaurants
                     };
                     setResult(fullResult);
-                    
+
                     // Auto-select if only one restaurant
                     if (fullResult.place_names.length === 1) {
                         setSelectedRestaurant(fullResult.place_names[0]);
@@ -188,15 +188,15 @@ export default function RestaurantAnalyzer() {
                 formData.append('url', url);
                 formData.append('promptType', 'structured');
                 formData.append('provider', 'anthropic');
-                
-                setProgress({step: 'Analyzing content...', percentage: 50, details: 'Processing with Claude'});
+
+                setProgress({ step: 'Analyzing content...', percentage: 50, details: 'Processing with Claude' });
 
                 const response = await fetch('/api/process-video', {
                     method: 'POST',
                     body: formData
                 });
 
-                setProgress({step: 'Processing results...', percentage: 90, details: 'Validating places and locations'});
+                setProgress({ step: 'Processing results...', percentage: 90, details: 'Validating places and locations' });
 
                 const data = await response.json();
 
@@ -205,7 +205,7 @@ export default function RestaurantAnalyzer() {
                 }
 
                 if (data.structuredData) {
-                    setProgress({step: 'Analysis complete!', percentage: 100, details: 'Results ready'});
+                    setProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
                     const fullResult = {
                         ...data.structuredData,
                         deducedRestaurant: data.deducedRestaurant,
@@ -217,7 +217,7 @@ export default function RestaurantAnalyzer() {
                         hasMultipleRestaurants: data.hasMultipleRestaurants
                     };
                     setResult(fullResult);
-                    
+
                     // Auto-select if only one restaurant
                     if (fullResult.place_names.length === 1) {
                         setSelectedRestaurant(fullResult.place_names[0]);
@@ -237,12 +237,12 @@ export default function RestaurantAnalyzer() {
 
     const getSelectedRestaurantDetails = () => {
         if (!selectedRestaurant || !result) return null;
-        
+
         // If we have restaurantDetails and it matches the selected restaurant
         if (result.restaurantDetails && result.restaurantDetails.name === selectedRestaurant) {
             return result.restaurantDetails;
         }
-        
+
         // Otherwise, create a basic restaurant object
         return {
             name: selectedRestaurant,
@@ -263,8 +263,8 @@ export default function RestaurantAnalyzer() {
                     <h1 className="text-3xl font-bold text-gray-900">
                         Restaurant Analyzer
                     </h1>
-                    <a 
-                        href="/structured-video-test" 
+                    <a
+                        href="/structured-video-test"
                         className="text-sm text-blue-600 hover:text-blue-800 underline"
                     >
                         Test Mode
@@ -273,10 +273,10 @@ export default function RestaurantAnalyzer() {
 
                 <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                     <h2 className="text-xl font-semibold mb-4">Analyze Restaurant Content</h2>
-                    
+
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
                         <p className="text-blue-800 text-sm">
-                            <strong>AI-Powered Analysis:</strong> Upload Instagram posts, videos, or images to automatically identify restaurants, 
+                            <strong>AI-Powered Analysis:</strong> Upload Instagram posts, videos, or images to automatically identify restaurants,
                             determine if they're chains or single locations, and get detailed information including addresses, hours, and ratings.
                         </p>
                     </div>
@@ -325,7 +325,7 @@ export default function RestaurantAnalyzer() {
                                 </div>
                             )}
                             <div className="w-full bg-blue-200 rounded-full h-2">
-                                <div 
+                                <div
                                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                                     style={{ width: `${progress.percentage}%` }}
                                 ></div>
@@ -345,7 +345,7 @@ export default function RestaurantAnalyzer() {
                                         <div key={index} className="p-4 border border-gray-200 rounded-lg">
                                             <h4 className="font-medium text-gray-900 mb-2">{restaurant}</h4>
                                             <p className="text-sm text-gray-600">
-                                                {result.context_clues?.find(clue => 
+                                                {result.context_clues?.find(clue =>
                                                     clue.toLowerCase().includes(restaurant.toLowerCase())
                                                 ) || 'Restaurant mentioned in content'}
                                             </p>
@@ -423,10 +423,10 @@ export default function RestaurantAnalyzer() {
                                                             )}
                                                             {getSelectedRestaurantDetails()?.website && (
                                                                 <p className="text-gray-600">
-                                                                    <span className="font-medium">Website:</span> 
-                                                                    <a 
-                                                                        href={getSelectedRestaurantDetails()?.website || ''} 
-                                                                        target="_blank" 
+                                                                    <span className="font-medium">Website:</span>
+                                                                    <a
+                                                                        href={getSelectedRestaurantDetails()?.website || ''}
+                                                                        target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="text-blue-600 hover:text-blue-800 ml-1"
                                                                     >

@@ -16,6 +16,7 @@ import PartyReceiptUpload from './PartyReceiptUpload';
 import PartyReceipts from './PartyReceipts';
 import PartyPaymentRequests from './PartyPaymentRequests';
 import BeforeFlowTab from './BeforeFlowTab';
+import { EventsList } from './EventsList';
 import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -35,7 +36,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts' | 'requests' | 'before-flow';
+type TabType = 'info' | 'upload' | 'receipts' | 'requests' | 'before-flow' | 'events';
 
 // Inner component that uses the PartyContext
 const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
@@ -51,6 +52,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [showInviteForm, setShowInviteForm] = useState(false);
     const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
     const [invitedUserProfiles, setInvitedUserProfiles] = useState<{ [userId: string]: UserProfile }>({});
+    const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
 
     const fetchPendingRequestsCount = async () => {
         try {
@@ -200,6 +202,10 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             console.error('Error sending invitation:', error);
             alert('Failed to send invitation');
         }
+    };
+
+    const handleEventSaved = () => {
+        setEventsRefreshKey(prev => prev + 1);
     };
 
     if (loading) {
@@ -394,7 +400,9 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             case 'requests':
                 return <PartyPaymentRequests partyId={partyId} memberProfiles={memberProfiles} onRequestsUpdate={setPendingRequestsCount} />;
             case 'before-flow':
-                return <BeforeFlowTab partyId={partyId} />;
+                return <BeforeFlowTab partyId={partyId} onEventSaved={handleEventSaved} />;
+            case 'events':
+                return <EventsList key={eventsRefreshKey} partyId={partyId} />;
             default:
                 return null;
         }
@@ -463,6 +471,15 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                             }`}
                     >
                         Before Flow
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('events')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'events'
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        Events
                     </button>
                 </nav>
             </div>

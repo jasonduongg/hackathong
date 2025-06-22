@@ -21,8 +21,6 @@ interface MemberProfile {
         country?: string;
     };
     job?: string;
-    bio?: string;
-    location?: string;
     createdAt?: any;
     updatedAt?: any;
 }
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
             success: true,
             commonTimes,
             memberCount: memberProfiles.length,
-            totalSlots: commonTimes.reduce((total, day) => total + day.availableSlots.length, 0),
+            totalAvailableHours: commonTimes.reduce((total, day) => total + day.availableSlots.length, 0),
             aggregatedPreferences,
             members: memberProfiles.map(profile => ({
                 uid: profile.uid,
@@ -131,7 +129,7 @@ function findCommonAvailabilityTimes(memberProfiles: MemberProfile[]) {
                 day,
                 timeRanges,
                 availableSlots: dayCommonSlots,
-                slotCount: dayCommonSlots.length
+                hourCount: dayCommonSlots.length
             });
         }
     });
@@ -165,15 +163,13 @@ function groupConsecutiveHours(hours: string[]): string[] {
 // Helper function to format time range
 function formatTimeRange(start: number, end: number): string {
     const formatHour = (hour: number) => {
-        if (hour === 0) return '12:00 AM';
-        if (hour < 12) return `${hour}:00 AM`;
-        if (hour === 12) return '12:00 PM';
-        return `${hour - 12}:00 PM`;
+        const h = hour % 24;
+        if (h === 0) return '12:00 AM';
+        if (h < 12) return `${h}:00 AM`;
+        if (h === 12) return '12:00 PM';
+        return `${h - 12}:00 PM`;
     };
     
-    if (start === end) {
-        return formatHour(start);
-    }
-    
-    return `${formatHour(start)} - ${formatHour(end)}`;
+    // An hour slot '18' means 18:00-19:00. So the range is from start to end+1.
+    return `${formatHour(start)} - ${formatHour(end + 1)}`;
 }

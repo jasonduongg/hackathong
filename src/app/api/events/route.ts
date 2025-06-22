@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRestaurantEvent, getRestaurantEventsByParty, getRestaurantEventsByUser } from '@/lib/events';
+import { createRestaurantEvent, getRestaurantEventsByParty, getRestaurantEventsByUser, deleteRestaurantEvent } from '@/lib/events';
 
 export async function POST(request: NextRequest) {
     try {
@@ -86,6 +86,35 @@ export async function GET(request: NextRequest) {
         console.error('Error fetching restaurant events:', error);
         return NextResponse.json(
             { error: 'Failed to fetch restaurant events' },
+            { status: 500 }
+        );
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { eventId } = body;
+
+        if (!eventId) {
+            return NextResponse.json(
+                { error: 'Event ID is required' },
+                { status: 400 }
+            );
+        }
+
+        // Delete the event (soft delete)
+        await deleteRestaurantEvent(eventId);
+
+        return NextResponse.json({
+            success: true,
+            message: 'Restaurant event deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Error deleting restaurant event:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete restaurant event' },
             { status: 500 }
         );
     }

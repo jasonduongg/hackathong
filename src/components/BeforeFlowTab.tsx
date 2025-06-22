@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVideoAnalysis } from '@/contexts/VideoAnalysisContext';
 
 interface BeforeFlowTabProps {
     partyId: string;
@@ -10,29 +11,32 @@ interface BeforeFlowTabProps {
 
 const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) => {
     const { user } = useAuth();
-    // Before Flow state
-    const [beforeFlowUrl, setBeforeFlowUrl] = useState<string>('');
-    const [beforeFlowLoading, setBeforeFlowLoading] = useState(false);
-    const [beforeFlowProgress, setBeforeFlowProgress] = useState<{ step: string, percentage: number, details?: string }>({ step: '', percentage: 0 });
-    const [beforeFlowResult, setBeforeFlowResult] = useState<any>(null);
-    const [beforeFlowError, setBeforeFlowError] = useState<string | null>(null);
-    const [instagramData, setInstagramData] = useState<{
-        screenshots: string[];
-        captionText: string;
-        accountMentions: string[];
-        locationTags: string[];
-        hashtags: string[];
-        allText: string;
-        screenshotCount: number;
-        videoDuration: number;
-    } | null>(null);
-    const [savingEvent, setSavingEvent] = useState(false);
-    const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const {
+        state: {
+            url: beforeFlowUrl,
+            loading: beforeFlowLoading,
+            progress: beforeFlowProgress,
+            result: beforeFlowResult,
+            error: beforeFlowError,
+            instagramData,
+            savingEvent,
+            saveStatus
+        },
+        setUrl: setBeforeFlowUrl,
+        setLoading: setBeforeFlowLoading,
+        setProgress: setBeforeFlowProgress,
+        setResult: setBeforeFlowResult,
+        setError: setBeforeFlowError,
+        setInstagramData,
+        setSavingEvent,
+        setSaveStatus,
+        clearError
+    } = useVideoAnalysis();
 
     // Before Flow handlers
     const handleBeforeFlowUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setBeforeFlowUrl(e.target.value);
-        setBeforeFlowError(null);
+        clearError();
     };
 
     const handleBeforeFlowSubmit = async (e: React.FormEvent) => {
@@ -52,7 +56,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         }
 
         setBeforeFlowLoading(true);
-        setBeforeFlowError(null);
+        clearError();
         setBeforeFlowResult(null);
         setBeforeFlowProgress({ step: 'Starting analysis...', percentage: 0 });
 

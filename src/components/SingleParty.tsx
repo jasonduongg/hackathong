@@ -18,6 +18,7 @@ import PartyPaymentRequests from './PartyPaymentRequests';
 import BeforeFlowTab from './BeforeFlowTab';
 import { EventsList } from './EventsList';
 import { PartyProvider, useParty } from '@/contexts/PartyContext';
+import { VideoAnalysisProvider, useVideoAnalysis } from '@/contexts/VideoAnalysisContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
@@ -37,6 +38,36 @@ interface PartyReceipt {
 }
 
 type TabType = 'info' | 'upload' | 'receipts' | 'requests' | 'before-flow' | 'events';
+
+// Component to show Before Flow tab button with loading indicator
+const BeforeFlowTabButton: React.FC<{
+    isActive: boolean;
+    onClick: () => void;
+}> = ({ isActive, onClick }) => {
+    const { state: { loading, progress } } = useVideoAnalysis();
+
+    return (
+        <button
+            onClick={onClick}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${isActive
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+        >
+            <div className="flex items-center space-x-2">
+                <span>Before Flow</span>
+                {loading && (
+                    <div className="flex items-center space-x-1">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs text-blue-600">
+                            {Math.round(progress.percentage)}%
+                        </span>
+                    </div>
+                )}
+            </div>
+        </button>
+    );
+};
 
 // Inner component that uses the PartyContext
 const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
@@ -463,15 +494,10 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                             )}
                         </div>
                     </button>
-                    <button
+                    <BeforeFlowTabButton
+                        isActive={activeTab === 'before-flow'}
                         onClick={() => setActiveTab('before-flow')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'before-flow'
-                            ? 'border-indigo-500 text-indigo-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                    >
-                        Before Flow
-                    </button>
+                    />
                     <button
                         onClick={() => setActiveTab('events')}
                         className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'events'
@@ -495,7 +521,9 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
 const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     return (
         <PartyProvider partyId={partyId}>
-            <SinglePartyContent partyId={partyId} />
+            <VideoAnalysisProvider>
+                <SinglePartyContent partyId={partyId} />
+            </VideoAnalysisProvider>
         </PartyProvider>
     );
 };

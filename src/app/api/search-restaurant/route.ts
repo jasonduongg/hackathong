@@ -59,11 +59,11 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const R = 6371; // Radius of the Earth in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in kilometers
 }
 
@@ -83,20 +83,20 @@ async function geocodeAddress(address: string): Promise<Location | null> {
   try {
     const encodedAddress = encodeURIComponent(address.trim());
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
-    
+
     console.log('Geocoding URL:', url.replace(apiKey, '[API_KEY]'));
-    
+
     const response = await fetch(url);
-    
+
     if (!response.ok) {
       console.error('Geocoding API response not ok:', response.status, response.statusText);
       return null;
     }
-    
+
     const data = await response.json();
-    
+
     console.log('Geocoding response status:', data.status);
-    
+
     if (data.status === 'OK' && data.results.length > 0) {
       const location = data.results[0].geometry.location;
       return { lat: location.lat, lng: location.lng };
@@ -107,7 +107,7 @@ async function geocodeAddress(address: string): Promise<Location | null> {
       console.error('Geocoding API error:', data.status, data.error_message);
       return null;
     }
-    
+
   } catch (error) {
     console.error('Error geocoding address:', error);
     return null;
@@ -125,12 +125,12 @@ async function searchRestaurantLocations(location: Location, restaurantName: str
   try {
     // Use text search to find specific restaurant locations
     const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(restaurantName)}&location=${location.lat},${location.lng}&radius=50000&type=restaurant&key=${apiKey}`;
-    
+
     console.log('Searching for restaurant locations:', restaurantName);
-    
+
     const response = await fetch(url);
     const data = await response.json();
-    
+
     if (data.status === 'OK') {
       console.log(`Found ${data.results.length} locations for ${restaurantName}`);
       return data.results;
@@ -138,7 +138,7 @@ async function searchRestaurantLocations(location: Location, restaurantName: str
       console.error('Places API error:', data.status, data.error_message);
       return [];
     }
-    
+
   } catch (error) {
     console.error('Error searching restaurant locations:', error);
     return [];
@@ -155,15 +155,20 @@ async function getPlaceDetails(placeId: string): Promise<any> {
 
   try {
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,opening_hours,rating,user_ratings_total,types&key=${apiKey}`
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,opening_hours,rating,user_ratings_total,types,photos&key=${apiKey}`
     );
-    
+
     const data = await response.json();
-    
+
     if (data.status === 'OK') {
+      // Add photo URL if photos are available
+      if (data.result.photos && data.result.photos.length > 0) {
+        const photoReference = data.result.photos[0].photo_reference;
+        data.result.photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoReference}&key=${apiKey}`;
+      }
       return data.result;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error getting place details:', error);
@@ -176,7 +181,7 @@ export async function POST(request: NextRequest) {
     // Check if Firebase is properly configured
     if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       return NextResponse.json(
-        { 
+        {
           error: 'Firebase configuration is missing. Please set up your environment variables.',
           details: 'Copy env.example to .env.local and fill in your Firebase configuration values.'
         },
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
     // Check if Google Maps API key is configured
     if (!process.env.GOOGLE_MAPS_API_KEY) {
       return NextResponse.json(
-        { 
+        {
           error: 'Google Maps API key is missing. Please set up your environment variables.',
           details: 'Add GOOGLE_MAPS_API_KEY to your .env.local file.'
         },
@@ -257,33 +262,33 @@ export async function POST(request: NextRequest) {
 
     // Get member profiles with addresses
     const memberProfiles = await getUserProfilesByIds(memberIds);
-    
+
     console.log('Member profiles:', memberProfiles.map(p => ({
       uid: p.uid,
       displayName: p.displayName,
       email: p.email,
       address: p.address
     })));
-    
+
     // Check for members with structured addresses only
     const membersWithAddresses = memberProfiles.filter(profile => {
       const hasAddress = profile.address && (
-        profile.address.street || 
-        profile.address.city || 
+        profile.address.street ||
+        profile.address.city ||
         profile.address.state
       );
-      
+
       console.log(`Member ${profile.displayName || profile.email}:`, {
         hasAddress,
         address: profile.address
       });
-      
+
       return hasAddress;
     });
 
     if (membersWithAddresses.length === 0) {
       return NextResponse.json(
-        { 
+        {
           error: 'No members with addresses found',
           details: 'Members need to complete their profile with structured address information (street, city, state)',
           memberCount: memberProfiles.length,
@@ -307,7 +312,7 @@ export async function POST(request: NextRequest) {
 
     // Geocode all member addresses
     const memberLocations: Array<{ profile: UserProfile; location: Location }> = [];
-    
+
     for (const profile of membersWithAddresses) {
       // Only use structured address data
       const address = profile.address!;
@@ -318,9 +323,9 @@ export async function POST(request: NextRequest) {
         address.zipCode,
         address.country
       ].filter(Boolean).join(', ');
-      
+
       console.log(`Geocoding address for ${profile.displayName || profile.email}:`, addressString);
-      
+
       const location = await geocodeAddress(addressString);
       if (location) {
         memberLocations.push({ profile, location });
@@ -350,7 +355,7 @@ export async function POST(request: NextRequest) {
 
     if (restaurantLocations.length === 0) {
       return NextResponse.json(
-        { 
+        {
           error: `No locations found for ${searchQuery}`,
           details: 'The restaurant may not exist in the search area or may be too far away'
         },
@@ -385,6 +390,7 @@ export async function POST(request: NextRequest) {
           hours: details?.opening_hours?.weekday_text || [],
           phone: details?.formatted_phone_number || '',
           website: details?.website || '',
+          image: details?.photoUrl || null,
           googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${location.placeId}`,
           isChain: restaurantLocations.length > 1
         };

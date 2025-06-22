@@ -15,6 +15,7 @@ interface RestaurantInfo {
     hours?: string[];
     distanceFromParty?: number;
     googleMapsUrl?: string;
+    image?: string;
 }
 
 interface BeforeFlowTabProps {
@@ -55,6 +56,10 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantInfo | null>(null);
+
+    // Search save state
+    const [savingSearchResult, setSavingSearchResult] = useState(false);
+    const [searchSaveStatus, setSearchSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     // Before Flow handlers
     const handleBeforeFlowUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +164,86 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
     const handleSelectSearchResult = (restaurant: RestaurantInfo) => {
         setSelectedRestaurant(restaurant);
+    };
+
+    const handleSaveSearchResult = async () => {
+        if (!selectedRestaurant || !user) {
+            setSearchSaveStatus('error');
+            return;
+        }
+
+        setSavingSearchResult(true);
+        setSearchSaveStatus('idle');
+
+        try {
+            // Prepare the restaurant data from search result
+            const restaurantData = {
+                restaurant: {
+                    name: selectedRestaurant.name,
+                    isChain: selectedRestaurant.isChain || false,
+                    chainName: selectedRestaurant.isChain ? selectedRestaurant.chainName : null,
+                    address: selectedRestaurant.address || null,
+                    website: selectedRestaurant.website || null,
+                    hours: selectedRestaurant.hours || null,
+                    phone: selectedRestaurant.phone || null,
+                    rating: selectedRestaurant.rating || null,
+                    placeId: null, // Search results don't have placeId
+                    image: selectedRestaurant.image || null
+                },
+                analysis: {
+                    place_names: [selectedRestaurant.name], // Use the selected restaurant name
+                    multiple_locations: false,
+                    activity_type: 'restaurant_search',
+                    foods_shown: [], // No food analysis from search
+                    tags: selectedRestaurant.isChain ? ['chain', 'franchise'] : ['local'],
+                    context_clues: [`Searched for: ${searchQuery}`]
+                },
+                processing: {
+                    frameCount: 0,
+                    originalPlaceCount: 1,
+                    validatedPlaceCount: 1,
+                    geocodedPlaceCount: 0
+                }
+            };
+
+            // Save to database
+            const response = await fetch('/api/events', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    partyId,
+                    instagramData: null, // No Instagram data for search results
+                    restaurantData,
+                    createdBy: user.uid,
+                    notes: `Restaurant search result: ${selectedRestaurant.name} (${searchQuery})`
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save search result');
+            }
+
+            const result = await response.json();
+            setSearchSaveStatus('success');
+
+            // Reset success status after 3 seconds
+            setTimeout(() => setSearchSaveStatus('idle'), 3000);
+
+            if (onEventSaved) {
+                onEventSaved();
+            }
+
+        } catch (error) {
+            console.error('Error saving search result:', error);
+            setSearchSaveStatus('error');
+
+            // Reset error status after 3 seconds
+            setTimeout(() => setSearchSaveStatus('idle'), 3000);
+        } finally {
+            setSavingSearchResult(false);
+        }
     };
 
     const handleBeforeFlowSubmit = async (e: React.FormEvent) => {
@@ -478,6 +563,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         setSelectedRestaurant(null);
         setSearchError(null);
         setLoadingTasks([]);
+        setSavingSearchResult(false);
+        setSearchSaveStatus('idle');
         clearError();
     };
 
@@ -759,6 +846,23 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                                         onClick={() => handleSelectSearchResult(restaurant)}
                                                     >
                                                         <div className="flex justify-between items-start">
+                                                            {/* Restaurant Image Thumbnail */}
+                                                            {restaurant.image && (
+                                                                <div className="flex-shrink-0 mr-4">
+                                                                    <div className="relative">
+                                                                        <img
+                                                                            src={restaurant.image}
+                                                                            alt={`${restaurant.name} restaurant`}
+                                                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                                                                            onError={(e) => {
+                                                                                const target = e.target as HTMLImageElement;
+                                                                                target.style.display = 'none';
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
                                                             <div className="flex-1">
                                                                 <div className="flex items-center space-x-2">
                                                                     <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
@@ -804,34 +908,177 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
                                     {/* Selected Restaurant Display */}
                                     {selectedRestaurant && (
-                                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                            <div className="flex items-start justify-between">
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                                            <div className="flex items-start justify-between mb-4">
                                                 <div className="flex-1">
-                                                    <div className="flex items-center mb-2">
-                                                        <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <div className="flex items-center mb-3">
+                                                        <svg className="h-6 w-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                         </svg>
-                                                        <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
+                                                        <h3 className="text-xl font-semibold text-green-900">Restaurant Selected!</h3>
                                                     </div>
-                                                    <div className="text-sm text-green-800">
-                                                        <p className="font-semibold text-base">{selectedRestaurant.name}</p>
-                                                        <p className="text-green-700">{selectedRestaurant.address}</p>
+
+                                                    {/* Restaurant Image Display */}
+                                                    {selectedRestaurant.image && (
+                                                        <div className="mb-4 p-4 bg-white rounded-lg border border-green-200">
+                                                            <h4 className="font-medium text-green-900 mb-3">Restaurant Photo</h4>
+                                                            <div className="relative">
+                                                                <img
+                                                                    src={selectedRestaurant.image}
+                                                                    alt={`${selectedRestaurant.name} restaurant`}
+                                                                    className="w-full h-48 object-cover rounded-lg shadow-md border border-green-200"
+                                                                    onError={(e) => {
+                                                                        const target = e.target as HTMLImageElement;
+                                                                        target.style.display = 'none';
+                                                                        // Show fallback message
+                                                                        const container = target.parentElement;
+                                                                        if (container) {
+                                                                            container.innerHTML = `
+                                                                                <div class="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-300">
+                                                                                    <div class="text-center text-gray-500">
+                                                                                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                                                        </svg>
+                                                                                        <p class="text-sm">Image not available</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            `;
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <div className="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-full">
+                                                                    Google Maps
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Restaurant Name and Basic Info */}
+                                                    <div className="mb-4">
+                                                        <h4 className="text-2xl font-bold text-green-900 mb-2">
+                                                            {selectedRestaurant.name}
+                                                        </h4>
+                                                        {selectedRestaurant.address && (
+                                                            <div className="flex items-start space-x-2 mb-2">
+                                                                <span className="text-green-600 mt-1">📍</span>
+                                                                <p className="text-lg text-green-800">{selectedRestaurant.address}</p>
+                                                            </div>
+                                                        )}
                                                         {selectedRestaurant.rating && (
-                                                            <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
+                                                            <div className="flex items-center space-x-2 mb-2">
+                                                                <span className="text-green-600">⭐</span>
+                                                                <span className="text-lg text-green-800 font-medium">
+                                                                    {selectedRestaurant.rating}/5 rating
+                                                                </span>
+                                                            </div>
                                                         )}
                                                         {selectedRestaurant.distanceFromParty && (
-                                                            <p className="text-green-600">
-                                                                Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
-                                                            </p>
+                                                            <div className="flex items-center space-x-2 mb-2">
+                                                                <span className="text-green-600">📏</span>
+                                                                <span className="text-lg text-green-800">
+                                                                    {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
+                                                                </span>
+                                                            </div>
                                                         )}
                                                         {selectedRestaurant.isChain && (
-                                                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
-                                                                Chain Restaurant
-                                                            </span>
+                                                            <div className="flex items-center space-x-2 mb-2">
+                                                                <span className="text-green-600">🏢</span>
+                                                                <span className="text-lg text-green-800">
+                                                                    Chain: {selectedRestaurant.chainName}
+                                                                </span>
+                                                            </div>
                                                         )}
+                                                    </div>
+
+                                                    {/* Contact Information and Hours */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                                                        <div>
+                                                            <h5 className="text-lg font-semibold text-green-800 mb-3">Contact Information</h5>
+                                                            {selectedRestaurant.website ? (
+                                                                <div className="flex items-center space-x-3 mb-3">
+                                                                    <span className="text-green-600 text-xl">🌐</span>
+                                                                    <a
+                                                                        href={selectedRestaurant.website}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-lg text-blue-600 hover:text-blue-800 underline font-medium"
+                                                                    >
+                                                                        Visit Website
+                                                                    </a>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-green-700 italic">Website not available</p>
+                                                            )}
+                                                            {selectedRestaurant.phone ? (
+                                                                <div className="flex items-center space-x-3">
+                                                                    <span className="text-green-600 text-xl">📞</span>
+                                                                    <a
+                                                                        href={`tel:${selectedRestaurant.phone}`}
+                                                                        className="text-lg text-green-800 hover:text-green-900 font-medium"
+                                                                    >
+                                                                        {selectedRestaurant.phone}
+                                                                    </a>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-green-700 italic">Phone not available</p>
+                                                            )}
+                                                        </div>
+
+                                                        <div>
+                                                            <h5 className="text-lg font-semibold text-green-800 mb-3">Operating Hours</h5>
+                                                            {selectedRestaurant.hours && selectedRestaurant.hours.length > 0 ? (
+                                                                <div className="space-y-1">
+                                                                    {selectedRestaurant.hours.map((hour: string, index: number) => (
+                                                                        <div key={index} className="text-base text-green-800 font-medium">
+                                                                            {hour}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-green-700 italic">Hours not available</p>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Save Button */}
+                                            <div className="pt-4 border-t border-green-200">
+                                                <button
+                                                    onClick={handleSaveSearchResult}
+                                                    disabled={savingSearchResult}
+                                                    className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 font-medium"
+                                                >
+                                                    {savingSearchResult ? (
+                                                        <>
+                                                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            <span>Saving...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                            </svg>
+                                                            <span>Save to Database</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+
+                                            {/* Save Status Messages */}
+                                            {searchSaveStatus === 'success' && (
+                                                <div className="mt-3 p-3 bg-green-100 border border-green-300 rounded-md">
+                                                    <p className="text-green-700 text-sm">✅ Restaurant saved successfully!</p>
+                                                </div>
+                                            )}
+                                            {searchSaveStatus === 'error' && (
+                                                <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-md">
+                                                    <p className="text-red-700 text-sm">❌ Failed to save restaurant. Please try again.</p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

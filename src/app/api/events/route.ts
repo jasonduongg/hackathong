@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRestaurantEvent, getRestaurantEventsByParty, getRestaurantEventsByUser, deleteRestaurantEvent } from '@/lib/events';
+import { createRestaurantEvent, getRestaurantEventsByParty, getRestaurantEventsByUser, deleteRestaurantEvent, updateRestaurantEvent } from '@/lib/events';
 
 export async function POST(request: NextRequest) {
     try {
@@ -115,6 +115,35 @@ export async function DELETE(request: NextRequest) {
         console.error('Error deleting restaurant event:', error);
         return NextResponse.json(
             { error: 'Failed to delete restaurant event' },
+            { status: 500 }
+        );
+    }
+}
+
+export async function PUT(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { eventId, scheduledTime } = body;
+
+        if (!eventId) {
+            return NextResponse.json(
+                { error: 'Event ID is required' },
+                { status: 400 }
+            );
+        }
+
+        // Update the event with scheduled time
+        await updateRestaurantEvent(eventId, { scheduledTime });
+
+        return NextResponse.json({
+            success: true,
+            message: 'Event updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error updating restaurant event:', error);
+        return NextResponse.json(
+            { error: 'Failed to update restaurant event' },
             { status: 500 }
         );
     }

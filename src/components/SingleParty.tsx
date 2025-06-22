@@ -19,10 +19,10 @@ import BeforeFlowTab from './BeforeFlowTab';
 import { EventsList } from './EventsList';
 import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { VideoAnalysisProvider, useVideoAnalysis } from '@/contexts/VideoAnalysisContext';
+import { UploadProvider } from '@/contexts/UploadContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
-import Availability from './Availability';
 
 interface SinglePartyProps {
     partyId: string;
@@ -38,7 +38,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts' | 'availability' | 'requests' | 'before-flow' | 'events';
+type TabType = 'info' | 'receipts' | 'requests' | 'before-flow';
 
 // Component to show Before Flow tab button with loading indicator
 const BeforeFlowTabButton: React.FC<{
@@ -97,6 +97,10 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
     const [selectedUserForModal, setSelectedUserForModal] = useState<UserProfile | null>(null);
+    const [showBeforeFlow, setShowBeforeFlow] = useState(true);
+    const [showUploadReceipt, setShowUploadReceipt] = useState(true);
+    const [eventsCount, setEventsCount] = useState(0);
+    const [loadingEventsCount, setLoadingEventsCount] = useState(false);
 
     const fetchMemberMetadata = async () => {
         if (!partyId) return;
@@ -150,7 +154,6 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             setLoadingCommonTimes(false);
         }
     };
-    const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
 
     const fetchPendingRequestsCount = async () => {
         try {
@@ -163,6 +166,28 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             }
         } catch (error) {
             console.error('Error fetching pending requests count:', error);
+        }
+    };
+
+    const fetchEventsCount = async () => {
+        if (!partyId) return;
+
+        try {
+            setLoadingEventsCount(true);
+            const response = await fetch(`/api/events?partyId=${partyId}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                setEventsCount(data.events?.length || 0);
+            } else {
+                console.error('Failed to fetch events count:', data.error);
+                setEventsCount(0);
+            }
+        } catch (error) {
+            console.error('Error fetching events count:', error);
+            setEventsCount(0);
+        } finally {
+            setLoadingEventsCount(false);
         }
     };
 
@@ -219,6 +244,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             fetchPendingInvitations();
             fetchMemberMetadata();
             fetchPendingRequestsCount();
+            fetchEventsCount();
         }
     }, [partyId, user]);
 
@@ -364,7 +390,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
 
     const handleRestaurantSelected = (restaurant: any) => {
         setSelectedRestaurant(restaurant);
-        setActiveTab('availability');
+        setActiveTab('info');
     };
 
     const handleConfirmSelection = (restaurant: any, selectedTimeSlot: any) => {
@@ -375,7 +401,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     };
 
     const handleEventSaved = () => {
-        setEventsRefreshKey(prev => prev + 1);
+        // This function is now empty as the events functionality is integrated into the BeforeFlowTab component
     };
 
     if (loading) {
@@ -392,45 +418,17 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900">Party Information</h2>
-                            <div className="flex space-x-2">
+                            <h2 className="text-3xl font-bold text-gray-900">{party.name}</h2>
+
+                            {party.members && party.members.length < 4 && (
                                 <button
-                                    onClick={() => {
-                                        setShowRestaurantData(true);
-                                        // Load saved data if it exists
-                                        if (savedRestaurantData) {
-                                            setRestaurantData(savedRestaurantData);
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700"
+                                    onClick={() => setShowInviteForm(!showInviteForm)}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
                                 >
-                                    Restaurant Data
+                                    {showInviteForm ? 'Cancel' : 'Invite Members'}
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        fetchMemberMetadata();
-                                        setShowMemberMetadata(true);
-                                    }}
-                                    disabled={loadingMetadata}
-                                    className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {loadingMetadata ? 'Loading...' : 'Member Metadata'}
-                                </button>
-                                <button
-                                    onClick={() => setShowJson(!showJson)}
-                                    className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700"
-                                >
-                                    {showJson ? 'Hide JSON' : 'Show JSON'}
-                                </button>
-                                {party.members && party.members.length < 4 && (
-                                    <button
-                                        onClick={() => setShowInviteForm(!showInviteForm)}
-                                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
-                                    >
-                                        {showInviteForm ? 'Cancel' : 'Invite Members'}
-                                    </button>
-                                )}
-                            </div>
+                            )}
+
                         </div>
 
                         {/* Party Header */}
@@ -445,6 +443,8 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                     {memberProfiles.find((p: UserProfile) => p.uid === party.createdBy)?.displayName || 'Unknown'}
                                 </p>
                             </div>
+                        <div className="mb-6">
+                            <p className="text-gray-600">{party.description}</p>
                         </div>
 
                         {/* Members Section */}
@@ -534,6 +534,159 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                                 </div>
                             </div>
                         )}
+
+                        {/* Availability Grid */}
+                        <div className="bg-green-50 rounded-lg p-4 mt-6">
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-lg font-medium text-green-900">Group Availability</h3>
+                                <button
+                                    onClick={fetchMemberMetadata}
+                                    disabled={loadingMetadata}
+                                    className="text-sm text-green-700 hover:text-green-800 underline"
+                                >
+                                    {loadingMetadata ? 'Loading...' : 'Refresh'}
+                                </button>
+                            </div>
+
+                            {loadingMetadata ? (
+                                <div className="text-center py-4">
+                                    <div className="text-green-700">Loading availability data...</div>
+                                </div>
+                            ) : memberMetadata && memberMetadata.memberProfiles ? (
+                                <div className="overflow-x-auto">
+                                    <div className="min-w-max">
+                                        {/* Header row with hours */}
+                                        <div className="flex mb-2">
+                                            <div className="w-10 flex-shrink-0"></div>
+                                            {Array.from({ length: 24 }, (_, i) => (
+                                                <div key={i} className="w-8 text-xs text-center text-green-700 font-medium">
+                                                    {i === 0 ? '12A' : i === 12 ? '12P' : i > 12 ? `${i - 12}P` : `${i}A`}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Days and availability grid */}
+                                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                                            <div key={day} className="flex items-center mb-1">
+                                                <div className="w-10 text-sm font-medium text-green-800 capitalize flex-shrink-0">
+                                                    {day === 'monday' ? 'M' :
+                                                        day === 'tuesday' ? 'T' :
+                                                            day === 'wednesday' ? 'W' :
+                                                                day === 'thursday' ? 'Th' :
+                                                                    day === 'friday' ? 'F' :
+                                                                        day === 'saturday' ? 'Sa' : 'Su'}
+                                                </div>
+                                                <div className="flex">
+                                                    {Array.from({ length: 24 }, (_, hour) => {
+                                                        const hourKey = hour.toString().padStart(2, '0');
+                                                        let availableCount = 0;
+
+                                                        // Count how many members are available at this time
+                                                        memberMetadata.memberProfiles.forEach((member: any) => {
+                                                            if (member.availability &&
+                                                                member.availability[day] &&
+                                                                member.availability[day][hourKey]) {
+                                                                availableCount++;
+                                                            }
+                                                        });
+
+                                                        const totalMembers = memberMetadata.memberProfiles.length;
+                                                        const availabilityRatio = totalMembers > 0 ? availableCount / totalMembers : 0;
+
+                                                        // Calculate color intensity based on availability ratio
+                                                        const getColorClass = (ratio: number) => {
+                                                            if (ratio === 0) return 'bg-gray-100';
+                                                            if (ratio <= 0.25) return 'bg-green-200';
+                                                            if (ratio <= 0.5) return 'bg-green-300';
+                                                            if (ratio <= 0.75) return 'bg-green-400';
+                                                            return 'bg-green-600';
+                                                        };
+
+                                                        return (
+                                                            <div
+                                                                key={hour}
+                                                                className={`w-8 h-6 border border-white ${getColorClass(availabilityRatio)} flex items-center justify-center`}
+                                                                title={`${availableCount}/${totalMembers} available at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`}
+                                                            >
+                                                                {availableCount > 0 && (
+                                                                    <span className="text-xs font-bold text-white">
+                                                                        {availableCount}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Legend */}
+                                    <div className="mt-4 flex items-center justify-center space-x-4 text-xs">
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-gray-100 border border-gray-300"></div>
+                                            <span className="text-gray-600">None</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-green-200 border border-gray-300"></div>
+                                            <span className="text-gray-600">1-25%</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-green-300 border border-gray-300"></div>
+                                            <span className="text-gray-600">26-50%</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-green-400 border border-gray-300"></div>
+                                            <span className="text-gray-600">51-75%</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-green-600 border border-gray-300"></div>
+                                            <span className="text-gray-600">76-100%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <div className="min-w-max">
+                                        {/* Skeleton Header row with hours */}
+                                        <div className="flex mb-2">
+                                            <div className="w-20 flex-shrink-0"></div>
+                                            {Array.from({ length: 24 }, (_, i) => (
+                                                <div key={i} className="w-8 text-xs text-center text-gray-400 font-medium">
+                                                    {i === 0 ? '12A' : i === 12 ? '12P' : i > 12 ? `${i - 12}P` : `${i}A`}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Skeleton Days and availability grid */}
+                                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                                            <div key={day} className="flex items-center mb-1">
+                                                <div className="w-20 text-sm font-medium text-gray-400 capitalize flex-shrink-0">
+                                                    {day === 'monday' ? 'M' :
+                                                        day === 'tuesday' ? 'T' :
+                                                            day === 'wednesday' ? 'W' :
+                                                                day === 'thursday' ? 'Th' :
+                                                                    day === 'friday' ? 'F' :
+                                                                        day === 'saturday' ? 'Sa' : 'Su'}
+                                                </div>
+                                                <div className="flex">
+                                                    {Array.from({ length: 24 }, (_, hour) => (
+                                                        <div
+                                                            key={hour}
+                                                            className="w-8 h-6 border border-gray-200 bg-gray-100 animate-pulse"
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-4 text-center text-sm text-gray-500">
+                                        Click "Refresh" to load availability data
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Pending Invitations Bar */}
                         {pendingInvitations.length > 0 && (
@@ -667,30 +820,81 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         </div>
                     </div>
                 );
-            case 'upload':
-                return (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <PartyReceiptUpload partyId={partyId} />
-                    </div>
-                );
             case 'receipts':
-                return <PartyReceipts partyId={partyId} memberProfiles={memberProfiles} />;
-            case 'availability':
                 return (
-                    <Availability
-                        loadingMetadata={loadingMetadata}
-                        commonTimes={commonTimes}
-                        fetchMemberMetadata={fetchMemberMetadata}
-                        selectedRestaurant={selectedRestaurant}
-                        onConfirmSelection={handleConfirmSelection}
-                    />
+                    <div className="space-y-6">
+                        {/* Toggle Buttons */}
+                        <div className="p-4">
+                            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                                <button
+                                    onClick={() => setShowUploadReceipt(true)}
+                                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${showUploadReceipt
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    Upload Receipt
+                                </button>
+                                <button
+                                    onClick={() => setShowUploadReceipt(false)}
+                                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${!showUploadReceipt
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    View Receipts
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content based on toggle */}
+                        {showUploadReceipt ? (
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Receipt</h2>
+                                <PartyReceiptUpload partyId={partyId} />
+                            </div>
+                        ) : (
+                            <PartyReceipts partyId={partyId} memberProfiles={memberProfiles} />
+                        )}
+                    </div>
                 );
             case 'requests':
                 return <PartyPaymentRequests partyId={partyId} memberProfiles={memberProfiles} onRequestsUpdate={setPendingRequestsCount} />;
             case 'before-flow':
-                return <BeforeFlowTab partyId={partyId} onEventSaved={handleEventSaved} />;
-            case 'events':
-                return <EventsList key={eventsRefreshKey} partyId={partyId} />;
+                return (
+                    <div className="space-y-6">
+                        {/* Toggle Buttons */}
+                        <div className="p-4">
+                            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                                <button
+                                    onClick={() => setShowBeforeFlow(true)}
+                                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${showBeforeFlow
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    Find Event
+                                </button>
+                                <button
+                                    onClick={() => setShowBeforeFlow(false)}
+                                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${!showBeforeFlow
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                >
+                                    View Events
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content based on toggle */}
+                        {showBeforeFlow ? (
+                            <BeforeFlowTab partyId={partyId} onEventSaved={handleEventSaved} />
+                        ) : (
+                            <EventsList partyId={partyId} />
+                        )}
+                    </div>
+                );
             default:
                 return null;
         }
@@ -711,22 +915,22 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         Party Info
                     </button>
                     <button
-                        onClick={() => setActiveTab('availability')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'availability'
+                        onClick={() => setActiveTab('before-flow')}
+                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'before-flow'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                     >
-                        Availability
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('upload')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
-                            ? 'border-indigo-500 text-indigo-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                    >
-                        Upload Receipt
+                        <div className="flex items-center space-x-2">
+                            <span>Before Going Out (Events)</span>
+                            <div className="flex items-center space-x-1">
+                                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <span className="text-xs font-medium text-blue-600">
+                                        {loadingEventsCount ? '...' : eventsCount}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </button>
                     <button
                         onClick={() => setActiveTab('receipts')}
@@ -736,12 +940,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                             }`}
                     >
                         <div className="flex items-center space-x-2">
-                            <span>Receipts</span>
-                            {receipts.length > 0 && (
-                                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                                    {receipts.length}
-                                </span>
-                            )}
+                            <span>After Going Out (Receipts)</span>
+                            <div className="flex items-center space-x-1">
+                                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                                    <span className="text-xs font-medium text-green-600">
+                                        {receipts.length}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </button>
                     <button
@@ -752,26 +958,13 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                             }`}
                     >
                         <div className="flex items-center space-x-2">
-                            <span>Requests</span>
+                            <span>Outstanding Requests</span>
                             {pendingRequestsCount > 0 && (
                                 <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
                                     {pendingRequestsCount}
                                 </span>
                             )}
                         </div>
-                    </button>
-                    <BeforeFlowTabButton
-                        isActive={activeTab === 'before-flow'}
-                        onClick={() => setActiveTab('before-flow')}
-                    />
-                    <button
-                        onClick={() => setActiveTab('events')}
-                        className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'events'
-                            ? 'border-indigo-500 text-indigo-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                    >
-                        Events
                     </button>
                 </nav>
             </div>
@@ -1107,7 +1300,9 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     return (
         <PartyProvider partyId={partyId}>
             <VideoAnalysisProvider>
-                <SinglePartyContent partyId={partyId} />
+                <UploadProvider>
+                    <SinglePartyContent partyId={partyId} />
+                </UploadProvider>
             </VideoAnalysisProvider>
         </PartyProvider>
     );

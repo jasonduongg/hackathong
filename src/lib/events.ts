@@ -67,6 +67,12 @@ export interface RestaurantEvent {
     createdBy?: string; // User ID who created the event
     status?: 'active' | 'archived' | 'deleted';
     notes?: string;
+    scheduledTime?: {
+        day: string;
+        hour: string;
+        startTime: string;
+        endTime: string;
+    };
 }
 
 // Create a new restaurant event

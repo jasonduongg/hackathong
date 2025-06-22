@@ -23,6 +23,7 @@ export interface ReceiptItem {
 export interface ReceiptData {
     store_name: string;
     date: string;
+    time?: string; // Time of purchase (e.g., '8:00 AM', '2:30 PM')
     total_amount: string;
     items: ReceiptItem[];
     tax_amount: string;

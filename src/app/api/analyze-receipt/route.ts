@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
               {
                 "store_name": "Store name",
                 "date": "Date of purchase",
+                "time": "Time of purchase (e.g., '8:00 AM', '2:30 PM')",
                 "total_amount": "Total amount",
                 "items": [
                   {
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
                     raw_response: responseText,
                     store_name: 'N/A',
                     date: 'N/A',
+                    time: 'N/A',
                     total_amount: 'N/A',
                     items: [],
                     tax_amount: 'N/A',
@@ -221,6 +223,7 @@ export async function POST(request: NextRequest) {
                 raw_response: responseText,
                 store_name: 'N/A',
                 date: 'N/A',
+                time: 'N/A',
                 total_amount: 'N/A',
                 items: [],
                 tax_amount: 'N/A',
@@ -257,10 +260,10 @@ export async function POST(request: NextRequest) {
         };
 
         // Generate a user-friendly display name for the receipt
-        const generateDisplayName = (storeName: string, date: string, totalAmount: string): string => {
+        const generateDisplayName = (storeName: string, date: string, time: string, totalAmount: string): string => {
             let displayName = '';
 
-            // Use store name if available and not N/A
+            // Start with store name if available
             if (storeName && storeName !== 'N/A' && storeName.trim() !== '') {
                 displayName = storeName.trim();
             } else {
@@ -304,6 +307,7 @@ export async function POST(request: NextRequest) {
         const displayName = generateDisplayName(
             parsedData.store_name,
             parsedData.date,
+            parsedData.time,
             parsedData.total_amount
         );
 

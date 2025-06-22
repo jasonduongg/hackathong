@@ -71,7 +71,7 @@ const ReceiptImageModal: React.FC<ReceiptImageModalProps> = ({
                             }}
                         />
                         <p className="text-sm text-gray-500 mt-4">
-                            {receipt.fileName} • {formatDate(receipt.uploadedAt)}
+                            {receipt.displayName || receipt.fileName} • {formatDate(receipt.uploadedAt)}
                         </p>
                     </div>
                 </div>

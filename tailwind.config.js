@@ -49,6 +49,18 @@ module.exports = {
                     DEFAULT: "hsl(var(--card))",
                     foreground: "hsl(var(--card-foreground))",
                 },
+                'soft-orange': {
+                    50: '#fef7f3',
+                    100: '#fdeee6',
+                    200: '#fbd9c8',
+                    300: '#f7a37f',
+                    400: '#f08a5a',
+                    500: '#ec6f35',
+                    600: '#dd5a1f',
+                    700: '#b8451a',
+                    800: '#93371a',
+                    900: '#772f1a',
+                },
             },
             borderRadius: {
                 lg: "var(--radius)",
@@ -64,10 +76,25 @@ module.exports = {
                     from: { height: "var(--radix-accordion-content-height)" },
                     to: { height: "0" },
                 },
+                "blob": {
+                    "0%": {
+                        transform: "translate(0px, 0px) scale(1)",
+                    },
+                    "33%": {
+                        transform: "translate(30px, -50px) scale(1.1)",
+                    },
+                    "66%": {
+                        transform: "translate(-20px, 20px) scale(0.9)",
+                    },
+                    "100%": {
+                        transform: "translate(0px, 0px) scale(1)",
+                    },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
+                "blob": "blob 7s infinite",
             },
             fontSize: {
                 'massive': ['8rem', { lineHeight: '1.2' }],

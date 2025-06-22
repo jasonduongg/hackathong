@@ -17,6 +17,14 @@ interface RestaurantInfo {
     googleMapsUrl?: string;
 }
 
+interface LoadingTask {
+    id: string;
+    title: string;
+    description: string;
+    status: 'pending' | 'loading' | 'completed' | 'error';
+    percentage?: number;
+}
+
 interface BeforeFlowTabProps {
     partyId: string;
     onEventSaved?: () => void;
@@ -53,10 +61,77 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
     const [searchError, setSearchError] = useState<string | null>(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantInfo | null>(null);
 
+    // Loading tasks state
+    const [loadingTasks, setLoadingTasks] = useState<LoadingTask[]>([]);
+
     // Before Flow handlers
     const handleBeforeFlowUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setBeforeFlowUrl(e.target.value);
         clearError();
+    };
+
+    // Initialize loading tasks based on URL type
+    const initializeLoadingTasks = (url: string) => {
+        const isInstagram = url.includes('instagram.com/p/');
+
+        if (isInstagram) {
+            setLoadingTasks([
+                {
+                    id: 'screenshot',
+                    title: 'Taking Instagram Screenshots',
+                    description: 'Capturing screenshots from Instagram post',
+                    status: 'pending'
+                },
+                {
+                    id: 'analysis',
+                    title: 'Analyzing Content',
+                    description: 'Processing screenshots with AI',
+                    status: 'pending'
+                },
+                {
+                    id: 'validation',
+                    title: 'Validating Places',
+                    description: 'Cross-referencing with Google Maps',
+                    status: 'pending'
+                },
+                {
+                    id: 'completion',
+                    title: 'Finalizing Results',
+                    description: 'Preparing analysis results',
+                    status: 'pending'
+                }
+            ]);
+        } else {
+            setLoadingTasks([
+                {
+                    id: 'analysis',
+                    title: 'Analyzing Content',
+                    description: 'Processing content with AI',
+                    status: 'pending'
+                },
+                {
+                    id: 'validation',
+                    title: 'Validating Places',
+                    description: 'Cross-referencing with Google Maps',
+                    status: 'pending'
+                },
+                {
+                    id: 'completion',
+                    title: 'Finalizing Results',
+                    description: 'Preparing analysis results',
+                    status: 'pending'
+                }
+            ]);
+        }
+    };
+
+    // Update loading task status
+    const updateLoadingTask = (taskId: string, status: LoadingTask['status'], percentage?: number) => {
+        setLoadingTasks(prev => prev.map(task =>
+            task.id === taskId
+                ? { ...task, status, percentage }
+                : task
+        ));
     };
 
     // Restaurant search handlers
@@ -124,6 +199,9 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         setBeforeFlowResult(null);
         setBeforeFlowProgress({ step: 'Starting analysis...', percentage: 0 });
 
+        // Initialize loading tasks
+        initializeLoadingTasks(beforeFlowUrl);
+
         try {
             const formData = new FormData();
 
@@ -131,6 +209,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
             const isInstagram = beforeFlowUrl.includes('instagram.com/p/');
 
             if (isInstagram) {
+                // Task 1: Screenshot
+                updateLoadingTask('screenshot', 'loading', 20);
                 setBeforeFlowProgress({ step: 'Taking Instagram screenshot...', percentage: 20, details: 'Loading Instagram page' });
 
                 // Step 1: Get screenshot from backend
@@ -143,6 +223,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 if (!screenshotRes.ok || !screenshotData.screenshots || screenshotData.screenshots.length === 0) {
                     throw new Error(screenshotData.error || 'Failed to screenshot Instagram post');
                 }
+
+                updateLoadingTask('screenshot', 'completed', 100);
 
                 // Store Instagram data for display
                 setInstagramData({
@@ -160,6 +242,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     ? ` (${Math.round(screenshotData.videoDuration)}s video, ${screenshotData.screenshotCount} screenshots)`
                     : ` (${screenshotData.screenshotCount} screenshots)`;
 
+                // Task 2: Analysis
+                updateLoadingTask('analysis', 'loading', 40);
                 setBeforeFlowProgress({ step: `Processing Instagram screenshot${durationText}...`, percentage: 40, details: 'Screenshots captured successfully' });
 
                 // Step 2: Send ALL screenshots for analysis
@@ -207,6 +291,10 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     body: analysisFormData
                 });
 
+                updateLoadingTask('analysis', 'completed', 100);
+
+                // Task 3: Validation
+                updateLoadingTask('validation', 'loading', 80);
                 setBeforeFlowProgress({ step: 'Processing results...', percentage: 90, details: 'Validating places and locations' });
 
                 const data = await analysisResponse.json();
@@ -216,9 +304,15 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     throw new Error(data.error || 'Failed to analyze screenshots');
                 }
 
+                updateLoadingTask('validation', 'completed', 100);
+
+                // Task 4: Completion
+                updateLoadingTask('completion', 'loading', 90);
+                setBeforeFlowProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
+
                 // Use the enhanced structured data from the API
                 if (data.structuredData) {
-                    setBeforeFlowProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
+                    updateLoadingTask('completion', 'completed', 100);
                     // Combine structuredData with other top-level fields
                     setBeforeFlowResult({
                         ...data.structuredData,
@@ -237,6 +331,8 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 formData.append('promptType', 'structured');
                 formData.append('provider', 'anthropic');
 
+                // Task 1: Analysis
+                updateLoadingTask('analysis', 'loading', 50);
                 setBeforeFlowProgress({ step: 'Analyzing content...', percentage: 50, details: 'Processing with Claude' });
                 console.log('Submitting URL:', beforeFlowUrl);
 
@@ -245,6 +341,10 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     body: formData
                 });
 
+                updateLoadingTask('analysis', 'completed', 100);
+
+                // Task 2: Validation
+                updateLoadingTask('validation', 'loading', 80);
                 setBeforeFlowProgress({ step: 'Processing results...', percentage: 90, details: 'Validating places and locations' });
 
                 const data = await response.json();
@@ -254,9 +354,15 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     throw new Error(data.error || 'Failed to process content');
                 }
 
+                updateLoadingTask('validation', 'completed', 100);
+
+                // Task 3: Completion
+                updateLoadingTask('completion', 'loading', 90);
+                setBeforeFlowProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
+
                 // Use the enhanced structured data from the API
                 if (data.structuredData) {
-                    setBeforeFlowProgress({ step: 'Analysis complete!', percentage: 100, details: 'Results ready' });
+                    updateLoadingTask('completion', 'completed', 100);
                     // Combine structuredData with other top-level fields
                     setBeforeFlowResult({
                         ...data.structuredData,
@@ -274,6 +380,11 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         } catch (error) {
             console.error('Error:', error);
             setBeforeFlowError(error instanceof Error ? error.message : 'An error occurred');
+            // Mark current task as error
+            const currentTask = loadingTasks.find(task => task.status === 'loading');
+            if (currentTask) {
+                updateLoadingTask(currentTask.id, 'error');
+            }
         } finally {
             setBeforeFlowLoading(false);
         }
@@ -383,6 +494,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
         setSearchResults([]);
         setSelectedRestaurant(null);
         setSearchError(null);
+        setLoadingTasks([]);
         clearError();
     };
 
@@ -411,244 +523,334 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
             {/* Show search options only when there are no results */}
             {!beforeFlowResult && (
                 <>
-                    {/* AI Analysis Section - Enhanced and Promoted */}
-                    <div className="mb-8">
-                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6 shadow-sm">
-                            <div className="flex items-center mb-4">
-                                <div className="flex-shrink-0">
-                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                                        <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                        </svg>
+                    {/* Loading Tasks Section - Show when analyzing */}
+                    {beforeFlowLoading && loadingTasks.length > 0 && (
+                        <div className="mb-8">
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 shadow-sm">
+                                <div className="flex items-center mb-6">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                            <svg className="h-5 w-5 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-lg font-medium text-blue-900">Processing Your Content</h3>
+                                        <p className="text-sm text-blue-700">We're analyzing your content step by step</p>
                                     </div>
                                 </div>
-                                <div className="ml-3">
-                                    <h3 className="text-lg font-medium text-purple-900">AI-Powered Content Analysis</h3>
-                                    <p className="text-sm text-purple-700">Upload images or Instagram posts for intelligent restaurant detection</p>
+
+                                <div className="space-y-4">
+                                    {loadingTasks.map((task, index) => (
+                                        <div
+                                            key={task.id}
+                                            className={`border rounded-lg p-4 transition-all duration-300 ${task.status === 'completed'
+                                                ? 'bg-green-50 border-green-300'
+                                                : task.status === 'loading'
+                                                    ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200'
+                                                    : task.status === 'error'
+                                                        ? 'bg-red-50 border-red-300'
+                                                        : 'bg-gray-50 border-gray-200'
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${task.status === 'completed'
+                                                        ? 'bg-green-500'
+                                                        : task.status === 'loading'
+                                                            ? 'bg-blue-500'
+                                                            : task.status === 'error'
+                                                                ? 'bg-red-500'
+                                                                : 'bg-gray-300'
+                                                        }`}>
+                                                        {task.status === 'completed' && (
+                                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                        {task.status === 'loading' && (
+                                                            <svg className="w-4 h-4 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                            </svg>
+                                                        )}
+                                                        {task.status === 'error' && (
+                                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        )}
+                                                        {task.status === 'pending' && (
+                                                            <span className="text-xs text-gray-600 font-medium">{index + 1}</span>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className={`font-medium ${task.status === 'completed'
+                                                            ? 'text-green-800'
+                                                            : task.status === 'loading'
+                                                                ? 'text-blue-800'
+                                                                : task.status === 'error'
+                                                                    ? 'text-red-800'
+                                                                    : 'text-gray-600'
+                                                            }`}>
+                                                            {task.title}
+                                                        </h4>
+                                                        <p className={`text-sm ${task.status === 'completed'
+                                                            ? 'text-green-600'
+                                                            : task.status === 'loading'
+                                                                ? 'text-blue-600'
+                                                                : task.status === 'error'
+                                                                    ? 'text-red-600'
+                                                                    : 'text-gray-500'
+                                                            }`}>
+                                                            {task.description}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {task.status === 'loading' && task.percentage && (
+                                                    <div className="text-right">
+                                                        <span className="text-sm font-medium text-blue-600">{task.percentage}%</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {task.status === 'loading' && task.percentage && (
+                                                <div className="mt-3">
+                                                    <div className="w-full bg-blue-200 rounded-full h-2">
+                                                        <div
+                                                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                                            style={{ width: `${task.percentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
+                        </div>
+                    )}
 
-                            <form onSubmit={handleBeforeFlowSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-purple-800 mb-2">
-                                        Enter URL
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={beforeFlowUrl}
-                                        onChange={handleBeforeFlowUrlChange}
-                                        placeholder="https://images.unsplash.com/photo-... or Instagram URL"
-                                        className="block w-full px-3 py-2 border border-purple-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
-                                    />
-                                    <p className="mt-1 text-sm text-purple-600">
-                                        Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
-                                    </p>
+                    {/* AI Analysis Section - Enhanced and Promoted - Only show when not loading */}
+                    {!beforeFlowLoading && (
+                        <div className="mb-8">
+                            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+                                <div className="flex items-center mb-4">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                            <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-lg font-medium text-purple-900">AI-Powered Content Analysis</h3>
+                                        <p className="text-sm text-purple-700">Upload images or Instagram posts for intelligent restaurant detection</p>
+                                    </div>
                                 </div>
 
-                                <div className="flex space-x-4">
-                                    <button
-                                        type="submit"
-                                        disabled={beforeFlowLoading || !beforeFlowUrl.trim()}
-                                        className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-2 px-4 rounded-md hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm"
-                                    >
-                                        {beforeFlowLoading ? 'Processing...' : 'Analyze with AI'}
-                                    </button>
-                                </div>
-                            </form>
+                                <form onSubmit={handleBeforeFlowSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-purple-800 mb-2">
+                                            Enter URL
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={beforeFlowUrl}
+                                            onChange={handleBeforeFlowUrlChange}
+                                            placeholder="https://images.unsplash.com/photo-... or Instagram URL"
+                                            className="block w-full px-3 py-2 border border-purple-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                                        />
+                                        <p className="mt-1 text-sm text-purple-600">
+                                            Use public image URLs (Unsplash, Pexels, direct image links) or Instagram URLs
+                                        </p>
+                                    </div>
 
-                            {/* AI Features Highlight */}
-                            <div className="mt-4 p-3 bg-white/50 rounded-lg border border-purple-100">
-                                <div className="flex items-center space-x-2 mb-2">
-                                    <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                    </svg>
-                                    <span className="text-xs font-medium text-purple-800">AI Features</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-purple-700">
-                                    <div className="flex items-center space-x-1">
-                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                                        <span>Smart screenshot analysis</span>
+                                    <div className="flex space-x-4">
+                                        <button
+                                            type="submit"
+                                            disabled={beforeFlowLoading || !beforeFlowUrl.trim()}
+                                            className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-2 px-4 rounded-md hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm"
+                                        >
+                                            {beforeFlowLoading ? 'Processing...' : 'Analyze with AI'}
+                                        </button>
                                     </div>
-                                    <div className="flex items-center space-x-1">
-                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                                        <span>Google Maps integration</span>
+                                </form>
+
+                                {/* AI Features Highlight */}
+                                <div className="mt-4 p-3 bg-white/50 rounded-lg border border-purple-100">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        <span className="text-xs font-medium text-purple-800">AI Features</span>
                                     </div>
-                                    <div className="flex items-center space-x-1">
-                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                                        <span>Restaurant validation</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1">
-                                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                                        <span>Comprehensive results</span>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-purple-700">
+                                        <div className="flex items-center space-x-1">
+                                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                            <span>Smart screenshot analysis</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                            <span>Google Maps integration</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                            <span>Restaurant validation</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                            <span>Comprehensive results</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Restaurant Search Section - Moved to second position */}
-                    <div className="mb-8">
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
-                            <div className="flex items-center mb-4">
-                                <div className="flex-shrink-0">
-                                    <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </div>
-                                <div className="ml-3">
-                                    <h3 className="text-lg font-medium text-orange-900">Search Restaurant</h3>
-                                    <p className="text-sm text-orange-700">Find a specific restaurant near your party</p>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex space-x-2">
-                                    <input
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                                        placeholder="Enter restaurant name (e.g., 'McDonald's', 'Pizza Hut')"
-                                        className="flex-1 px-3 py-2 text-sm border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                        disabled={isSearching}
-                                    />
-                                    <button
-                                        onClick={handleSearch}
-                                        disabled={isSearching || !searchQuery.trim()}
-                                        className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isSearching ? 'Searching...' : 'Search'}
-                                    </button>
-                                </div>
-
-                                {searchError && (
-                                    <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-3">
-                                        {searchError}
+                    {/* Restaurant Search Section - Moved to second position - Only show when not loading */}
+                    {!beforeFlowLoading && (
+                        <div className="mb-8">
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+                                <div className="flex items-center mb-4">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
                                     </div>
-                                )}
+                                    <div className="ml-3">
+                                        <h3 className="text-lg font-medium text-orange-900">Search Restaurant</h3>
+                                        <p className="text-sm text-orange-700">Find a specific restaurant near your party</p>
+                                    </div>
+                                </div>
 
-                                {searchResults.length > 0 && (
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-medium text-orange-800">Search Results ({searchResults.length} found)</h4>
-                                        {searchResults.map((restaurant, index) => {
-                                            const isSelected = selectedRestaurant &&
-                                                selectedRestaurant.name === restaurant.name &&
-                                                selectedRestaurant.address === restaurant.address;
+                                <div className="space-y-4">
+                                    <div className="flex space-x-2">
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                            placeholder="Enter restaurant name (e.g., 'McDonald's', 'Pizza Hut')"
+                                            className="flex-1 px-3 py-2 text-sm border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                            disabled={isSearching}
+                                        />
+                                        <button
+                                            onClick={handleSearch}
+                                            disabled={isSearching || !searchQuery.trim()}
+                                            className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isSearching ? 'Searching...' : 'Search'}
+                                        </button>
+                                    </div>
 
-                                            return (
-                                                <div
-                                                    key={index}
-                                                    className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
-                                                        ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
-                                                        : 'bg-white border-orange-200 hover:bg-orange-50'
-                                                        }`}
-                                                    onClick={() => handleSelectSearchResult(restaurant)}
-                                                >
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center space-x-2">
-                                                                <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
-                                                                {isSelected && (
-                                                                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                                                                        Selected
-                                                                    </span>
-                                                                )}
+                                    {searchError && (
+                                        <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-md p-3">
+                                            {searchError}
+                                        </div>
+                                    )}
+
+                                    {searchResults.length > 0 && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-medium text-orange-800">Search Results ({searchResults.length} found)</h4>
+                                            {searchResults.map((restaurant, index) => {
+                                                const isSelected = selectedRestaurant &&
+                                                    selectedRestaurant.name === restaurant.name &&
+                                                    selectedRestaurant.address === restaurant.address;
+
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected
+                                                            ? 'bg-green-50 border-green-300 ring-2 ring-green-200'
+                                                            : 'bg-white border-orange-200 hover:bg-orange-50'
+                                                            }`}
+                                                        onClick={() => handleSelectSearchResult(restaurant)}
+                                                    >
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <h5 className="font-medium text-gray-900">{restaurant.name}</h5>
+                                                                    {isSelected && (
+                                                                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                                            Selected
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-sm text-gray-600">{restaurant.address}</p>
+                                                                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                                                                    {restaurant.rating && (
+                                                                        <span>⭐ {restaurant.rating}/5</span>
+                                                                    )}
+                                                                    {restaurant.distanceFromParty && (
+                                                                        <span>📍 {restaurant.distanceFromParty.toFixed(1)} km away</span>
+                                                                    )}
+                                                                    {restaurant.isChain && (
+                                                                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                                            Chain
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <p className="text-sm text-gray-600">{restaurant.address}</p>
-                                                            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                                                {restaurant.rating && (
-                                                                    <span>⭐ {restaurant.rating}/5</span>
+                                                            <button className={`${isSelected ? 'text-green-600' : 'text-orange-600 hover:text-orange-800'
+                                                                }`}>
+                                                                {isSelected ? (
+                                                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                    </svg>
                                                                 )}
-                                                                {restaurant.distanceFromParty && (
-                                                                    <span>📍 {restaurant.distanceFromParty.toFixed(1)} km away</span>
-                                                                )}
-                                                                {restaurant.isChain && (
-                                                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                                                        Chain
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            </button>
                                                         </div>
-                                                        <button className={`${isSelected ? 'text-green-600' : 'text-orange-600 hover:text-orange-800'
-                                                            }`}>
-                                                            {isSelected ? (
-                                                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                </svg>
-                                                            )}
-                                                        </button>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    )}
 
-                                {/* Selected Restaurant Display */}
-                                {selectedRestaurant && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <div className="flex items-center mb-2">
-                                                    <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                    <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
-                                                </div>
-                                                <div className="text-sm text-green-800">
-                                                    <p className="font-semibold text-base">{selectedRestaurant.name}</p>
-                                                    <p className="text-green-700">{selectedRestaurant.address}</p>
-                                                    {selectedRestaurant.rating && (
-                                                        <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
-                                                    )}
-                                                    {selectedRestaurant.distanceFromParty && (
-                                                        <p className="text-green-600">
-                                                            Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
-                                                        </p>
-                                                    )}
-                                                    {selectedRestaurant.isChain && (
-                                                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
-                                                            Chain Restaurant
-                                                        </span>
-                                                    )}
+                                    {/* Selected Restaurant Display */}
+                                    {selectedRestaurant && (
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center mb-2">
+                                                        <svg className="h-5 w-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        <h3 className="text-lg font-medium text-green-900">Restaurant Selected!</h3>
+                                                    </div>
+                                                    <div className="text-sm text-green-800">
+                                                        <p className="font-semibold text-base">{selectedRestaurant.name}</p>
+                                                        <p className="text-green-700">{selectedRestaurant.address}</p>
+                                                        {selectedRestaurant.rating && (
+                                                            <p className="text-green-600">Rating: {selectedRestaurant.rating}/5</p>
+                                                        )}
+                                                        {selectedRestaurant.distanceFromParty && (
+                                                            <p className="text-green-600">
+                                                                Distance: {selectedRestaurant.distanceFromParty.toFixed(1)} km from party center
+                                                            </p>
+                                                        )}
+                                                        {selectedRestaurant.isChain && (
+                                                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-1">
+                                                                Chain Restaurant
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </>
             )}
 
             {beforeFlowError && (
                 <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
                     <p className="text-red-700">{beforeFlowError}</p>
-                </div>
-            )}
-
-            {beforeFlowLoading && beforeFlowProgress.step && (
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-blue-700 text-sm font-medium">{beforeFlowProgress.step}</span>
-                        <span className="text-blue-700 text-sm">{Math.round(beforeFlowProgress.percentage)}%</span>
-                    </div>
-                    {beforeFlowProgress.details && (
-                        <div className="text-blue-600 text-xs mb-2 italic">
-                            {beforeFlowProgress.details}
-                        </div>
-                    )}
-                    <div className="w-full bg-blue-200 rounded-full h-2">
-                        <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${beforeFlowProgress.percentage}%` }}
-                        ></div>
-                    </div>
                 </div>
             )}
 

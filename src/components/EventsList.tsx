@@ -62,9 +62,11 @@ interface RestaurantEvent {
 interface EventsListProps {
     partyId: string;
     showScheduledOnly?: boolean;
+    upcomingEvents?: any[];
+    onEventsChange?: () => void;
 }
 
-export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOnly = false }) => {
+export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOnly = false, upcomingEvents, onEventsChange }) => {
     const { user } = useAuth();
     const [events, setEvents] = useState<RestaurantEvent[]>([]);
     const [loading, setLoading] = useState(true);
@@ -133,6 +135,7 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOn
 
             // Remove the event from the local state
             setEvents(prev => prev.filter(event => event.id !== eventId));
+            onEventsChange?.();
         } catch (error) {
             console.error('Error deleting event:', error);
             alert('Failed to delete event. Please try again.');
@@ -141,11 +144,20 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOn
         }
     };
 
-    const handleEventUpdated = (updatedEvent: RestaurantEvent) => {
+    const handleEventUpdated = (updatedEvent: RestaurantEvent | undefined) => {
+        // If updatedEvent is undefined, it means the event was deleted
+        if (!updatedEvent) {
+            // Refresh the events list to get the latest state
+            fetchEvents();
+            onEventsChange?.();
+            return;
+        }
+        
         // Update the event in the local state
         setEvents(prev => prev.map(event =>
             event.id === updatedEvent.id ? updatedEvent : event
         ));
+        onEventsChange?.();
     };
 
     // Filter events based on the filter state
@@ -246,6 +258,7 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOn
                         onDelete={handleDeleteEvent}
                         isDeleting={deletingEvent === event.id}
                         onEventUpdated={handleEventUpdated}
+                        upcomingEvents={upcomingEvents}
                     />
                 ))}
             </div>

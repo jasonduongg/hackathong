@@ -63,10 +63,11 @@ interface EventCardProps {
     event: RestaurantEvent;
     onDelete: (eventId: string) => void;
     isDeleting: boolean;
-    onEventUpdated?: (event: RestaurantEvent) => void;
+    onEventUpdated?: (event: RestaurantEvent | undefined) => void;
+    upcomingEvents?: any[];
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeleting, onEventUpdated }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeleting, onEventUpdated, upcomingEvents }) => {
     const [creatorName, setCreatorName] = useState<string>('Loading...');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [openToAvailability, setOpenToAvailability] = useState(false);
@@ -93,7 +94,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
         fetchCreatorName();
     }, [event.createdBy]);
 
-    const handleEventUpdated = (updatedEvent: RestaurantEvent) => {
+    const handleEventUpdated = (updatedEvent: RestaurantEvent | undefined) => {
         if (onEventUpdated) {
             onEventUpdated(updatedEvent);
         }
@@ -107,6 +108,42 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setOpenToAvailability(false);
+    };
+
+    const handleUnscheduleEvent = async () => {
+        if (!confirm('Are you sure you want to unschedule this event? The event will remain but will no longer have a scheduled time.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/events', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    eventId: event.id,
+                    scheduledTime: null
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to unschedule event');
+            }
+
+            // Call the callback to notify parent of the change
+            if (onEventUpdated) {
+                onEventUpdated({
+                    ...event,
+                    scheduledTime: undefined
+                });
+            }
+
+            alert('Event unscheduled successfully');
+        } catch (error) {
+            console.error('Error unscheduling event:', error);
+            alert('Failed to unschedule event. Please try again.');
+        }
     };
 
     const formatDate = (date: any) => {
@@ -240,6 +277,17 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </button>
+                            {event.scheduledTime && (
+                                <button
+                                    onClick={handleUnscheduleEvent}
+                                    className="text-yellow-600 hover:text-yellow-800 p-2 rounded-full hover:bg-yellow-50 transition-colors"
+                                    title="Unschedule event"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            )}
                             <button
                                 onClick={() => onDelete(event.id)}
                                 disabled={isDeleting}
@@ -309,6 +357,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                 onClose={handleCloseModal}
                 onEventUpdated={handleEventUpdated}
                 openToAvailability={openToAvailability}
+                upcomingEvents={upcomingEvents}
             />
         </div>
     );

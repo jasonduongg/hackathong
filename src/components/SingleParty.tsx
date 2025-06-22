@@ -111,6 +111,56 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deletingParty, setDeletingParty] = useState(false);
 
+    // Function to check if a time slot is already scheduled
+    const isTimeSlotScheduled = (day: string, hour: number) => {
+        if (!upcomingEvents || upcomingEvents.length === 0) return false;
+        
+        return upcomingEvents.some(event => {
+            if (!event.scheduledTime) return false;
+            
+            // Check if the event is scheduled for this exact day
+            if (event.scheduledTime.day !== day) return false;
+            
+            // Parse start and end times
+            const startTime = event.scheduledTime.startTime;
+            const endTime = event.scheduledTime.endTime;
+            
+            if (!startTime) return false;
+            
+            // Convert time strings to hours (e.g., "1:00 PM" -> 13, "1:00 AM" -> 1)
+            const parseTimeToHour = (timeStr: string) => {
+                const time = timeStr.toLowerCase();
+                const isPM = time.includes('pm');
+                const timeMatch = time.match(/(\d+):(\d+)/);
+                
+                if (!timeMatch) return 0;
+                
+                let hour = parseInt(timeMatch[1]);
+                if (isPM && hour !== 12) hour += 12;
+                if (!isPM && hour === 12) hour = 0;
+                
+                return hour;
+            };
+            
+            const eventStartHour = parseTimeToHour(startTime);
+            const eventEndHour = endTime ? parseTimeToHour(endTime) : eventStartHour + 1;
+            
+            // Debug logging (only for development)
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`Checking event: ${event.restaurantData?.restaurant?.name || 'Unknown'} on ${day} from ${startTime} to ${endTime} (${eventStartHour}-${eventEndHour}) vs current hour ${hour}`);
+            }
+            
+            // Check if the current hour falls within the event's time range
+            const isScheduled = hour >= eventStartHour && hour < eventEndHour;
+            
+            if (isScheduled && process.env.NODE_ENV === 'development') {
+                console.log(`Time slot ${day} ${hour}:00 is scheduled for ${event.restaurantData?.restaurant?.name || 'Unknown'}`);
+            }
+            
+            return isScheduled;
+        });
+    };
+
     const fetchMemberMetadata = async () => {
         if (!partyId) return;
 
@@ -146,7 +196,8 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    memberProfiles: memberProfiles
+                    memberProfiles: memberProfiles,
+                    upcomingEvents: upcomingEvents
                 })
             });
 
@@ -322,6 +373,18 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
         }
     }, [memberProfiles]);
 
+    // Refresh common times when upcoming events change
+    useEffect(() => {
+        if (memberMetadata && memberMetadata.memberProfiles && upcomingEvents) {
+            // Add a small delay to prevent rapid successive calls
+            const timeoutId = setTimeout(() => {
+                fetchCommonTimes(memberMetadata.memberProfiles);
+            }, 200);
+            
+            return () => clearTimeout(timeoutId);
+        }
+    }, [upcomingEvents?.length]); // Only depend on the length, not the entire array
+
     // Helper function to get background color for initials
     const getInitialColor = (uid: string) => {
         const colors = [
@@ -449,7 +512,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
     };
 
     const handleEventSaved = () => {
-        // This function is now empty as the events functionality is integrated into the BeforeFlowTab component
+        // Refresh upcoming events to update the availability grid
+        fetchUpcomingEvents();
+        fetchEventsCount();
+        
+        // Refresh common times to update availability calculations
+        if (memberMetadata && memberMetadata.memberProfiles) {
+            fetchCommonTimes(memberMetadata.memberProfiles);
+        }
     };
 
     const handleEditPartyName = () => {
@@ -818,6 +888,9 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                                         const hourKey = hour.toString().padStart(2, '0');
                                                         let availableCount = 0;
 
+                                                        // Check if this time slot is already scheduled
+                                                        const isScheduled = isTimeSlotScheduled(day, hour);
+
                                                         // Count how many members are available at this time
                                                         memberMetadata.memberProfiles.forEach((member: any) => {
                                                             if (member.availability &&
@@ -839,13 +912,23 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                                             return 'bg-green-600';
                                                         };
 
+                                                        // If scheduled, show as unavailable regardless of availability
+                                                        const finalColorClass = isScheduled ? 'bg-gray-300' : getColorClass(availabilityRatio);
+
                                                         return (
                                                             <div
                                                                 key={hour}
-                                                                className={`w-8 h-6 border border-white ${getColorClass(availabilityRatio)} flex items-center justify-center`}
-                                                                title={`${availableCount}/${totalMembers} available at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`}
+                                                                className={`w-8 h-6 border border-white ${finalColorClass} flex items-center justify-center relative ${isScheduled ? 'border-gray-400 border-2' : ''}`}
+                                                                title={isScheduled 
+                                                                    ? `Scheduled event at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`
+                                                                    : `${availableCount}/${totalMembers} available at ${hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}`
+                                                                }
                                                             >
-                                                                {availableCount > 0 && (
+                                                                {isScheduled ? (
+                                                                    <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                ) : availableCount > 0 && (
                                                                     <span className="text-xs font-bold text-white">
                                                                         {availableCount}
                                                                     </span>
@@ -863,6 +946,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                                         <div className="flex items-center space-x-1">
                                             <div className="w-4 h-4 bg-gray-100 border border-gray-300"></div>
                                             <span className="text-gray-600">None</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <div className="w-4 h-4 bg-gray-300 border-2 border-gray-400 flex items-center justify-center">
+                                                <svg className="w-2 h-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-gray-600">Scheduled</span>
                                         </div>
                                         <div className="flex items-center space-x-1">
                                             <div className="w-4 h-4 bg-green-200 border border-gray-300"></div>
@@ -1128,7 +1219,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                         {showBeforeFlow ? (
                             <BeforeFlowTab partyId={partyId} onEventSaved={handleEventSaved} />
                         ) : (
-                            <EventsList partyId={partyId} showScheduledOnly={showScheduledEventsOnly} />
+                            <EventsList partyId={partyId} showScheduledOnly={showScheduledEventsOnly} upcomingEvents={upcomingEvents} onEventsChange={handleEventSaved} />
                         )}
                     </div>
                 );

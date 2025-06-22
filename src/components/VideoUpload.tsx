@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface VideoUploadProps {
     onClose: () => void;
@@ -30,6 +30,20 @@ export function VideoUpload({ onClose }: VideoUploadProps) {
     const [provider, setProvider] = useState<'openai' | 'anthropic' | 'gemini'>('openai');
     const [customInstructions, setCustomInstructions] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Prevent background scrolling when modal is open
+    useEffect(() => {
+        const originalBodyStyle = window.getComputedStyle(document.body).overflow;
+        const originalHtmlStyle = window.getComputedStyle(document.documentElement).overflow;
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = originalBodyStyle;
+            document.documentElement.style.overflow = originalHtmlStyle;
+        };
+    }, []);
 
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -135,7 +149,7 @@ export function VideoUpload({ onClose }: VideoUploadProps) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                     <div className="flex justify-between items-center mb-6">

@@ -32,6 +32,20 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
     const items = receipt.analysis.items || [];
     const currentItem = items[currentItemIndex];
 
+    // Prevent background scrolling when modal is open
+    useEffect(() => {
+        const originalBodyStyle = window.getComputedStyle(document.body).overflow;
+        const originalHtmlStyle = window.getComputedStyle(document.documentElement).overflow;
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = originalBodyStyle;
+            document.documentElement.style.overflow = originalHtmlStyle;
+        };
+    }, []);
+
     useEffect(() => {
         // Initialize assignments for all items
         const initialAssignments: AssignmentState = {};
@@ -194,7 +208,7 @@ const ItemAssignmentFlow: React.FC<ItemAssignmentFlowProps> = ({
     const amountPerPerson = assignedCount > 0 ? itemTotal / assignedCount : 0;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                     {/* Header */}

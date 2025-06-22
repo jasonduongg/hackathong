@@ -18,6 +18,9 @@ import { PartyProvider } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
+import { NearestRestaurantFinder } from './NearestRestaurantFinder';
+import ChainLocationFinder from './ChainLocationFinder';
+import ChooseRestaurant from './ChooseRestaurant';
 import Availability from './Availability';
 
 interface SinglePartyProps {
@@ -34,7 +37,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts' | 'availability';
+type TabType = 'info' | 'choose-restaurant' | 'upload' | 'receipts' | 'availability';
 
 const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const { user, userProfile } = useAuth();
@@ -55,6 +58,10 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [memberMetadata, setMemberMetadata] = useState<any>(null);
     const [showMemberMetadata, setShowMemberMetadata] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
+    const [showRestaurantFinder, setShowRestaurantFinder] = useState(false);
+    const [restaurantFinderData, setRestaurantFinderData] = useState<any>(null);
+    const [showChainLocationFinder, setShowChainLocationFinder] = useState(false);
+    const [chainLocationData, setChainLocationData] = useState<any>(null);
     const [commonTimes, setCommonTimes] = useState<any>(null);
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
     const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
@@ -306,6 +313,71 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
         } finally {
             setSavingRestaurantData(false);
         }
+    };
+
+    const fetchMemberMetadata = async () => {
+        if (!partyId) return;
+
+        try {
+            setLoadingMetadata(true);
+            const response = await fetch(`/api/get-members?partyId=${partyId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                setMemberMetadata(data);
+                
+                // Now call the get-times API to find common availability times
+                await fetchCommonTimes(data.memberProfiles);
+            } else {
+                console.error('Failed to fetch member metadata:', data.error);
+                alert('Failed to fetch member metadata');
+            }
+        } catch (error) {
+            console.error('Error fetching member metadata:', error);
+        } finally {
+            setLoadingMetadata(false);
+        }
+    };
+
+    const fetchCommonTimes = async (memberProfiles: any[]) => {
+        if (!memberProfiles || memberProfiles.length === 0) return;
+
+        try {
+            setLoadingCommonTimes(true);
+            const response = await fetch('/api/get-times', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    memberProfiles: memberProfiles
+                })
+            });
+            
+            const data = await response.json();
+
+            if (data.success) {
+                setCommonTimes(data);
+            } else {
+                console.error('Failed to fetch common times:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching common times:', error);
+        } finally {
+            setLoadingCommonTimes(false);
+        }
+    };
+
+    const handleRestaurantFound = (data: any) => {
+        setRestaurantFinderData(data);
+        console.log('Restaurant found:', data);
+        // You can add additional logic here, like saving to database or showing notifications
+    };
+
+    const handleChainLocationFound = (data: any) => {
+        setChainLocationData(data);
+        console.log('Chain location found:', data);
+        // You can add additional logic here, like saving to database or showing notifications
     };
 
     if (loading) {
@@ -597,6 +669,14 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                         </div>
                     </div>
                 );
+            case 'choose-restaurant':
+                return (
+                    <ChooseRestaurant
+                        partyId={partyId}
+                        onRestaurantFound={handleRestaurantFound}
+                        onChainLocationFound={handleChainLocationFound}
+                    />
+                );
             case 'upload':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -622,22 +702,26 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     return (
         <PartyProvider partyId={partyId}>
             <div className="container mx-auto p-4 md:p-6 lg:p-8 h-full">
-                <div className="border-b border-gray-200 pb-4">
-                    <h1 className="text-3xl font-bold text-gray-900">{party.name}</h1>
-                    <p className="mt-1 text-sm text-gray-600">{party.description}</p>
-                </div>
-
                 {/* Tab Navigation */}
-                <div className="mt-8 border-b border-gray-200">
+                <div className="border-b border-gray-200">
                     <nav className="-mb-px flex space-x-8">
                         <button
                             onClick={() => setActiveTab('info')}
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
                             Party Info
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('choose-restaurant')}
+                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'choose-restaurant'
+                                ? 'border-indigo-500 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            Choose Restaurant
                         </button>
                         <button
                             onClick={() => setActiveTab('availability')}
@@ -653,16 +737,16 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
-                            Upload Receipts
+                            Upload Receipt
                         </button>
                         <button
                             onClick={() => setActiveTab('receipts')}
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
                             Receipts
                         </button>
@@ -778,16 +862,16 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                             <h4 className="text-md font-medium text-blue-900 mb-2">Party Information</h4>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Name:</span> {memberMetadata.party.name}
+                                                    <span className="font-medium text-blue-800">Name:</span> {memberMetadata?.party?.name || 'Unknown'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Description:</span> {memberMetadata.party.description}
+                                                    <span className="font-medium text-blue-800">Description:</span> {memberMetadata?.party?.description || 'No description'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Created By:</span> {memberMetadata.party.createdBy}
+                                                    <span className="font-medium text-blue-800">Created By:</span> {memberMetadata?.party?.createdBy || 'Unknown'}
                                                 </div>
                                                 <div>
-                                                    <span className="font-medium text-blue-800">Member Count:</span> {memberMetadata.memberCount}
+                                                    <span className="font-medium text-blue-800">Member Count:</span> {memberMetadata?.party?.memberCount || 0}
                                                 </div>
                                             </div>
                                         </div>
@@ -884,7 +968,7 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                         <div>
                                             <h4 className="text-md font-medium text-gray-900 mb-3">Member Profiles</h4>
                                             <div className="space-y-4">
-                                                {memberMetadata.memberProfiles.map((member: any, index: number) => (
+                                                {memberMetadata?.memberProfiles?.map((member: any, index: number) => (
                                                     <div key={member.uid} className="bg-gray-50 rounded-lg p-4">
                                                         <div className="flex items-center space-x-3 mb-3">
                                                             <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-medium">

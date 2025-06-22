@@ -114,7 +114,7 @@ async function geocodeAddress(address: string): Promise<Location | null> {
   }
 }
 
-// Search for specific restaurant locations using Google Places API
+// Search for restaurant locations using Google Places API
 async function searchRestaurantLocations(location: Location, restaurantName: string): Promise<PlaceResult[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { partyId, restaurantData } = body;
+    const { partyId, restaurantData, restaurantName } = body;
 
     if (!partyId) {
       return NextResponse.json(
@@ -205,9 +205,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!restaurantData || !restaurantData.restaurant || !restaurantData.restaurant.name) {
+    // Support both restaurantData (from video analysis) and restaurantName (direct search)
+    let searchQuery: string;
+    let originalRestaurant: any;
+
+    if (restaurantData && restaurantData.restaurant && restaurantData.restaurant.name) {
+      // Using restaurant data from video analysis
+      searchQuery = restaurantData.restaurant.name;
+      originalRestaurant = restaurantData.restaurant;
+    } else if (restaurantName && restaurantName.trim() !== '') {
+      // Using direct restaurant name search
+      searchQuery = restaurantName.trim();
+      originalRestaurant = {
+        name: searchQuery,
+        isChain: true, // Assume it's a chain when searching by name
+        chainName: searchQuery,
+        address: '',
+        website: '',
+        hours: [],
+        phone: '',
+        rating: 0,
+        placeId: ''
+      };
+    } else {
       return NextResponse.json(
-        { error: 'Restaurant data with name is required' },
+        { error: 'Either restaurant data with name or restaurant name is required' },
         { status: 400 }
       );
     }
@@ -324,36 +346,16 @@ export async function POST(request: NextRequest) {
     console.log('Party centroid:', centroid);
 
     // Search for restaurant locations
-    const restaurantName = restaurantData.restaurant.name;
-    const restaurantLocations = await searchRestaurantLocations(centroid, restaurantName);
+    const restaurantLocations = await searchRestaurantLocations(centroid, searchQuery);
 
     if (restaurantLocations.length === 0) {
       return NextResponse.json(
         { 
-          error: `No locations found for ${restaurantName}`,
-          details: 'The restaurant may not have multiple locations or may not be in the search area'
+          error: `No locations found for ${searchQuery}`,
+          details: 'The restaurant may not exist in the search area or may be too far away'
         },
         { status: 404 }
       );
-    }
-
-    // Find the nearest restaurant location to the centroid
-    let nearestLocation = restaurantLocations[0];
-    let minDistance = calculateDistance(
-      centroid.lat, centroid.lng,
-      nearestLocation.geometry.location.lat, nearestLocation.geometry.location.lng
-    );
-
-    for (const location of restaurantLocations) {
-      const distance = calculateDistance(
-        centroid.lat, centroid.lng,
-        location.geometry.location.lat, location.geometry.location.lng
-      );
-      
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestLocation = location;
-      }
     }
 
     // Sort all locations by distance and take top 3
@@ -383,14 +385,16 @@ export async function POST(request: NextRequest) {
           hours: details?.opening_hours?.weekday_text || [],
           phone: details?.formatted_phone_number || '',
           website: details?.website || '',
-          googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${location.placeId}`
+          googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${location.placeId}`,
+          isChain: restaurantLocations.length > 1
         };
       })
     );
 
     // Format the response
     const response = {
-      originalRestaurant: restaurantData.restaurant,
+      searchQuery: searchQuery,
+      originalRestaurant: originalRestaurant,
       nearestLocation: {
         name: locationsWithDetails[0].name,
         address: locationsWithDetails[0].address,
@@ -400,7 +404,8 @@ export async function POST(request: NextRequest) {
         rating: locationsWithDetails[0].rating,
         placeId: sortedLocations[0].placeId,
         distanceFromParty: locationsWithDetails[0].distance,
-        googleMapsUrl: locationsWithDetails[0].googleMapsUrl
+        googleMapsUrl: locationsWithDetails[0].googleMapsUrl,
+        isChain: locationsWithDetails[0].isChain
       },
       allLocations: locationsWithDetails,
       partyInfo: {
@@ -417,7 +422,7 @@ export async function POST(request: NextRequest) {
         totalLocationsFound: restaurantLocations.length,
         topLocationsShown: 3,
         searchRadius: '50km',
-        restaurantName: restaurantName,
+        restaurantName: searchQuery,
         isChain: restaurantLocations.length > 1
       }
     };
@@ -428,9 +433,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error finding nearest chain location:', error);
+    console.error('Error searching restaurant:', error);
     return NextResponse.json(
-      { error: 'Failed to find nearest chain location' },
+      { error: 'Failed to search restaurant' },
       { status: 500 }
     );
   }

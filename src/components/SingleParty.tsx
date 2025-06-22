@@ -19,7 +19,6 @@ import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
-import { NearestRestaurantFinder } from './NearestRestaurantFinder';
 import ChainLocationFinder from './ChainLocationFinder';
 import ChooseRestaurant from './ChooseRestaurant';
 import Availability from './Availability';
@@ -62,13 +61,12 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [memberMetadata, setMemberMetadata] = useState<any>(null);
     const [showMemberMetadata, setShowMemberMetadata] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
-    const [showRestaurantFinder, setShowRestaurantFinder] = useState(false);
-    const [restaurantFinderData, setRestaurantFinderData] = useState<any>(null);
     const [showChainLocationFinder, setShowChainLocationFinder] = useState(false);
     const [chainLocationData, setChainLocationData] = useState<any>(null);
     const [commonTimes, setCommonTimes] = useState<any>(null);
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
     const [aggregatedPreferences, setAggregatedPreferences] = useState<any>(null);
+    const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
 
     const fetchMemberMetadata = async () => {
         if (!partyId) return;
@@ -235,6 +233,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             profile.email?.charAt(0)?.toUpperCase() || 'U';
     };
 
+    // Helper function to get user display (image or initials)
+    const getUserDisplay = (profile: UserProfile) => {
+        if (profile.photoURL) {
+            return { type: 'image', value: profile.photoURL };
+        }
+        return { type: 'initial', value: getInitial(profile) };
+    };
+
     const handleSearchUsers = async () => {
         if (!searchEmail.trim()) {
             setSearchResults([]);
@@ -325,16 +331,22 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         }
     };
 
-    const handleRestaurantFound = (data: any) => {
-        setRestaurantFinderData(data);
-        console.log('Restaurant found:', data);
-        // You can add additional logic here, like saving to database or showing notifications
+    const handleRestaurantSelected = (restaurant: any) => {
+        setSelectedRestaurant(restaurant);
+        setActiveTab('availability');
     };
 
     const handleChainLocationFound = (data: any) => {
         setChainLocationData(data);
         console.log('Chain location found:', data);
         // You can add additional logic here, like saving to database or showing notifications
+    };
+
+    const handleConfirmSelection = (restaurant: any, selectedTimeSlot: any) => {
+        console.log('Final selection confirmed:', { restaurant, selectedTimeSlot });
+        // Here you can save the final selection to the database
+        // and potentially navigate to a confirmation page or show a success message
+        alert(`Party confirmed! ${restaurant.name} on ${selectedTimeSlot.day} at ${selectedTimeSlot.hour}`);
     };
 
     if (loading) {
@@ -636,8 +648,9 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                 return (
                     <ChooseRestaurant
                         partyId={partyId}
-                        onRestaurantFound={handleRestaurantFound}
+                        onRestaurantSelected={handleRestaurantSelected}
                         onChainLocationFound={handleChainLocationFound}
+                        selectedRestaurant={selectedRestaurant}
                     />
                 );
             case 'upload':
@@ -654,6 +667,8 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         loadingMetadata={loadingMetadata}
                         commonTimes={commonTimes}
                         fetchMemberMetadata={fetchMemberMetadata}
+                        selectedRestaurant={selectedRestaurant}
+                        onConfirmSelection={handleConfirmSelection}
                     />
                 );
             case 'requests':

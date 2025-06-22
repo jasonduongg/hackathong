@@ -47,11 +47,15 @@ export async function POST(request: NextRequest) {
         // Also extract aggregated preferences for additional context
         const aggregatedPreferences = extractAggregatedPreferences(memberProfiles);
 
+        // Calculate total available time slots across all days
+        const totalAvailableSlots = commonTimes.reduce((total, day) => total + day.timeSlots.length, 0);
+
         return NextResponse.json({
             success: true,
             commonTimes,
             memberCount: memberProfiles.length,
             totalAvailableHours: commonTimes.reduce((total, day) => total + day.availableSlots.length, 0),
+            totalAvailableSlots, // Total number of 1-hour slots available
             aggregatedPreferences,
             members: memberProfiles.map(profile => ({
                 uid: profile.uid,
@@ -123,18 +127,47 @@ function findCommonAvailabilityTimes(memberProfiles: MemberProfile[]) {
         });
         
         if (dayCommonSlots.length > 0) {
-            // Group consecutive hours into time ranges
+            // Create individual 1-hour time slots for selection
+            const timeSlots = dayCommonSlots.map(hour => ({
+                hour: hour,
+                timeRange: formatTimeSlot(hour),
+                startTime: formatHour(parseInt(hour)),
+                endTime: formatHour(parseInt(hour) + 1),
+                isSelected: false // Default to not selected
+            }));
+
+            // Also keep the grouped ranges for display purposes
             const timeRanges = groupConsecutiveHours(dayCommonSlots);
+            
             commonTimes.push({
                 day,
-                timeRanges,
+                timeSlots, // Individual 1-hour slots for selection
+                timeRanges, // Grouped ranges for display
                 availableSlots: dayCommonSlots,
-                hourCount: dayCommonSlots.length
+                hourCount: dayCommonSlots.length,
+                totalSlots: dayCommonSlots.length
             });
         }
     });
 
     return commonTimes;
+}
+
+// Helper function to format individual time slot
+function formatTimeSlot(hour: string): string {
+    const h = parseInt(hour);
+    const startTime = formatHour(h);
+    const endTime = formatHour(h + 1);
+    return `${startTime} - ${endTime}`;
+}
+
+// Helper function to format hour for display
+function formatHour(hour: number): string {
+    const h = hour % 24;
+    if (h === 0) return '12:00 AM';
+    if (h < 12) return `${h}:00 AM`;
+    if (h === 12) return '12:00 PM';
+    return `${h - 12}:00 PM`;
 }
 
 // Helper function to group consecutive hours into ranges
@@ -162,14 +195,6 @@ function groupConsecutiveHours(hours: string[]): string[] {
 
 // Helper function to format time range
 function formatTimeRange(start: number, end: number): string {
-    const formatHour = (hour: number) => {
-        const h = hour % 24;
-        if (h === 0) return '12:00 AM';
-        if (h < 12) return `${h}:00 AM`;
-        if (h === 12) return '12:00 PM';
-        return `${h - 12}:00 PM`;
-    };
-    
     // An hour slot '18' means 18:00-19:00. So the range is from start to end+1.
     return `${formatHour(start)} - ${formatHour(end + 1)}`;
 }

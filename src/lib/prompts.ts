@@ -1,4 +1,3 @@
-
 // TypeScript interfaces for structured video analysis
 export interface StructuredVideoData {
     place_names: string[];
@@ -19,6 +18,7 @@ export interface StructuredVideoData {
         phone?: string | null;
         rating?: number | null;
         placeId?: string | null;
+        image?: string | null;
     };
     enhanced_places?: Array<{
         originalName: string;

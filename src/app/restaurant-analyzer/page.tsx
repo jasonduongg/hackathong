@@ -12,6 +12,7 @@ interface RestaurantDetails {
     phone?: string | null;
     rating?: number | null;
     placeId?: string | null;
+    image?: string | null;
 }
 
 interface AnalysisResult {
@@ -396,6 +397,24 @@ export default function RestaurantAnalyzer() {
 
                                 {getSelectedRestaurantDetails() && (
                                     <div className="grid md:grid-cols-2 gap-6">
+                                        {/* Restaurant Image */}
+                                        {getSelectedRestaurantDetails()?.image && (
+                                            <div className="md:col-span-2 mb-6">
+                                                <h4 className="font-medium text-gray-900 mb-3">Restaurant Photo</h4>
+                                                <div className="relative">
+                                                    <img 
+                                                        src={getSelectedRestaurantDetails()?.image || ''} 
+                                                        alt={`${selectedRestaurant} restaurant`}
+                                                        className="w-full h-64 object-cover rounded-lg shadow-md"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.style.display = 'none';
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="space-y-4">
                                             <div>
                                                 <h4 className="font-medium text-gray-900 mb-2">Restaurant Information</h4>

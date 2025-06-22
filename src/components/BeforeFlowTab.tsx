@@ -301,8 +301,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
                     placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
-                    // Exclude image URL to avoid size issues
-                    // image: beforeFlowResult.restaurantDetails.image || null
+                    image: beforeFlowResult.restaurantDetails.image || null
                 } : null,
                 analysis: {
                     place_names: (beforeFlowResult.place_names || []).slice(0, 5), // Limit array length
@@ -890,8 +889,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                                     phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
                                     rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
                                     placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
-                                    // Exclude image URL to avoid size issues
-                                    // image: beforeFlowResult.restaurantDetails.image || null
+                                    image: beforeFlowResult.restaurantDetails.image || null
                                 } : null,
                                 analysis: {
                                     place_names: (beforeFlowResult.place_names || []).slice(0, 5), // Limit array length

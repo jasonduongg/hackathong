@@ -3,8 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import Hero from '@/components/Hero';
-import HeroBackground from '@/components/HeroBackground';
+import NewHero from '@/components/NewHero';
 import HowItWorks from '@/components/HowItWorks';
 import Testimonials from '@/components/ui/testimonials';
 import Footer from '@/components/ui/footer';
@@ -41,10 +40,7 @@ export default function Home() {
     <div className="bg-gradient-to-br from-soft-orange-50 via-soft-orange-25 to-soft-orange-100">
       {/* Hero Section */}
       <section id="hero" className="relative min-h-screen scroll-mt-16">
-        <HeroBackground />
-        <div className="absolute inset-0 px-4 md:px-8 lg:px-16 pt-16">
-          <Hero />
-        </div>
+        <NewHero />
       </section>
 
       {/* How It Works Section */}

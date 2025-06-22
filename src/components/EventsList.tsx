@@ -61,18 +61,24 @@ interface RestaurantEvent {
 
 interface EventsListProps {
     partyId: string;
+    showScheduledOnly?: boolean;
 }
 
-export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
+export const EventsList: React.FC<EventsListProps> = ({ partyId, showScheduledOnly = false }) => {
     const { user } = useAuth();
     const [events, setEvents] = useState<RestaurantEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [deletingEvent, setDeletingEvent] = useState<string | null>(null);
+    const [filterScheduledOnly, setFilterScheduledOnly] = useState(showScheduledOnly);
 
     useEffect(() => {
         fetchEvents();
     }, [partyId]);
+
+    useEffect(() => {
+        setFilterScheduledOnly(showScheduledOnly);
+    }, [showScheduledOnly]);
 
     const fetchEvents = async () => {
         try {
@@ -86,7 +92,16 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
             const data = await response.json();
             // Sort events by creation date (newest first)
             const sortedEvents = data.events.sort((a: RestaurantEvent, b: RestaurantEvent) => {
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                const dateA = new Date(a.createdAt);
+                const dateB = new Date(b.createdAt);
+
+                // Handle invalid dates
+                if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+                    console.warn('Invalid date found:', { a: a.createdAt, b: b.createdAt });
+                    return 0;
+                }
+
+                return dateB.getTime() - dateA.getTime();
             });
             setEvents(sortedEvents);
         } catch (error) {
@@ -133,6 +148,11 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
         ));
     };
 
+    // Filter events based on the filter state
+    const filteredEvents = filterScheduledOnly
+        ? events.filter(event => event.scheduledTime)
+        : events;
+
     if (loading) {
         return (
             <div className="p-4">
@@ -164,7 +184,7 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
         );
     }
 
-    if (events.length === 0) {
+    if (filteredEvents.length === 0) {
         return (
             <div className="p-4">
                 <div className="text-center py-8">
@@ -173,9 +193,14 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No restaurant events yet</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {filterScheduledOnly ? 'No scheduled events yet' : 'No restaurant events yet'}
+                    </h3>
                     <p className="text-gray-500">
-                        Start analyzing Instagram posts to save restaurant events to this party.
+                        {filterScheduledOnly
+                            ? 'Schedule events to see them here.'
+                            : 'Start analyzing Instagram posts to save restaurant events to this party.'
+                        }
                     </p>
                 </div>
             </div>
@@ -185,12 +210,36 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
     return (
         <div className="p-4">
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Restaurant Events</h3>
-                <span className="text-sm text-gray-500">{events.length} events</span>
+                <div className="flex items-center space-x-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                        {filterScheduledOnly ? 'Scheduled Events' : 'Restaurant Events'}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => setFilterScheduledOnly(false)}
+                            className={`px-3 py-1 text-sm rounded-md transition-colors ${!filterScheduledOnly
+                                ? 'bg-blue-100 text-blue-700 font-medium'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            All Events
+                        </button>
+                        <button
+                            onClick={() => setFilterScheduledOnly(true)}
+                            className={`px-3 py-1 text-sm rounded-md transition-colors ${filterScheduledOnly
+                                ? 'bg-green-100 text-green-700 font-medium'
+                                : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            Scheduled Only
+                        </button>
+                    </div>
+                </div>
+                <span className="text-sm text-gray-500">{filteredEvents.length} events</span>
             </div>
 
             <div className="space-y-4">
-                {events.map((event) => (
+                {filteredEvents.map((event) => (
                     <EventCard
                         key={event.id}
                         event={event}

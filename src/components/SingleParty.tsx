@@ -21,11 +21,12 @@ import { PartyProvider, useParty } from '@/contexts/PartyContext';
 import { VideoAnalysisProvider, useVideoAnalysis } from '@/contexts/VideoAnalysisContext';
 import { UploadProvider } from '@/contexts/UploadContext';
 import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, writeBatch, collection, query, getDocs, where } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
 
 interface SinglePartyProps {
     partyId: string;
+    onPartyDeleted?: () => void;
 }
 
 interface PartyReceipt {
@@ -71,7 +72,7 @@ const BeforeFlowTabButton: React.FC<{
 };
 
 // Inner component that uses the PartyContext
-const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
+const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDeleted }) => {
     const { user, userProfile } = useAuth();
     const { receipts } = useParty();
     const [activeTab, setActiveTab] = useState<TabType>('info');
@@ -101,6 +102,14 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [showUploadReceipt, setShowUploadReceipt] = useState(true);
     const [eventsCount, setEventsCount] = useState(0);
     const [loadingEventsCount, setLoadingEventsCount] = useState(false);
+    const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+    const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(false);
+    const [showScheduledEventsOnly, setShowScheduledEventsOnly] = useState(false);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedPartyName, setEditedPartyName] = useState('');
+    const [savingPartyName, setSavingPartyName] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletingParty, setDeletingParty] = useState(false);
 
     const fetchMemberMetadata = async () => {
         if (!partyId) return;
@@ -191,6 +200,44 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         }
     };
 
+    const fetchUpcomingEvents = async () => {
+        if (!partyId) return;
+
+        try {
+            setLoadingUpcomingEvents(true);
+            const response = await fetch(`/api/events?partyId=${partyId}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                // Filter events that have scheduledTime and sort by scheduled time
+                const scheduledEvents = data.events
+                    .filter((event: any) => event.scheduledTime)
+                    .sort((a: any, b: any) => {
+                        // Sort by day first, then by hour
+                        const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                        const dayA = dayOrder.indexOf(a.scheduledTime.day);
+                        const dayB = dayOrder.indexOf(b.scheduledTime.day);
+
+                        if (dayA !== dayB) {
+                            return dayA - dayB;
+                        }
+
+                        return parseInt(a.scheduledTime.hour) - parseInt(b.scheduledTime.hour);
+                    });
+
+                setUpcomingEvents(scheduledEvents);
+            } else {
+                console.error('Failed to fetch upcoming events:', data.error);
+                setUpcomingEvents([]);
+            }
+        } catch (error) {
+            console.error('Error fetching upcoming events:', error);
+            setUpcomingEvents([]);
+        } finally {
+            setLoadingUpcomingEvents(false);
+        }
+    };
+
     useEffect(() => {
         const fetchPartyDetails = async () => {
             try {
@@ -245,6 +292,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             fetchMemberMetadata();
             fetchPendingRequestsCount();
             fetchEventsCount();
+            fetchUpcomingEvents();
         }
     }, [partyId, user]);
 
@@ -404,6 +452,93 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
         // This function is now empty as the events functionality is integrated into the BeforeFlowTab component
     };
 
+    const handleEditPartyName = () => {
+        setEditedPartyName(party?.name || '');
+        setIsEditingName(true);
+    };
+
+    const handleSavePartyName = async () => {
+        if (!party || !editedPartyName.trim()) return;
+
+        try {
+            setSavingPartyName(true);
+            const docRef = doc(db, 'parties', partyId);
+            await updateDoc(docRef, {
+                name: editedPartyName.trim()
+            });
+
+            // Update local state
+            setParty(prev => prev ? { ...prev, name: editedPartyName.trim() } : null);
+            setIsEditingName(false);
+        } catch (error) {
+            console.error('Error updating party name:', error);
+            alert('Failed to update party name');
+        } finally {
+            setSavingPartyName(false);
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setIsEditingName(false);
+        setEditedPartyName('');
+    };
+
+    const handleDeleteParty = async () => {
+        if (!party) return;
+
+        try {
+            setDeletingParty(true);
+
+            // Delete all associated data first
+            const batch = writeBatch(db);
+
+            // Delete receipts
+            const receiptsQuery = query(collection(db, 'receipts'), where('partyId', '==', partyId));
+            const receiptsSnapshot = await getDocs(receiptsQuery);
+            receiptsSnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            // Delete events
+            const eventsQuery = query(collection(db, 'events'), where('partyId', '==', partyId));
+            const eventsSnapshot = await getDocs(eventsQuery);
+            eventsSnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            // Delete payment requests
+            const paymentsQuery = query(collection(db, 'paymentRequests'), where('partyId', '==', partyId));
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            paymentsSnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            // Delete invitations for this party
+            const invitationsQuery = query(collection(db, 'invitations'), where('partyId', '==', partyId));
+            const invitationsSnapshot = await getDocs(invitationsQuery);
+            invitationsSnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+
+            // Finally delete the party itself
+            const partyRef = doc(db, 'parties', partyId);
+            batch.delete(partyRef);
+
+            // Commit all deletions
+            await batch.commit();
+
+            // Close the modal and call the callback to set current party view to none
+            setShowDeleteConfirm(false);
+            onPartyDeleted?.();
+        } catch (error) {
+            console.error('Error deleting party:', error);
+            alert('Failed to delete party and associated data');
+        } finally {
+            setDeletingParty(false);
+            setShowDeleteConfirm(false);
+        }
+    };
+
     if (loading) {
         return <div className="text-center py-10">Loading party details...</div>;
     }
@@ -417,72 +552,173 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
             case 'info':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-3xl font-bold text-gray-900">{party.name}</h2>
-
-                            {party.members && party.members.length < 4 && (
-                                <button
-                                    onClick={() => setShowInviteForm(!showInviteForm)}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
-                                >
-                                    {showInviteForm ? 'Cancel' : 'Invite Members'}
-                                </button>
-                            )}
-
-                        </div>
-
                         {/* Party Header */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">{party.name}</h1>
-                                <p className="text-gray-600">{party.description}</p>
+                        <div className="mb-6">
+                            {/* Title and Actions Row */}
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex-1">
+                                    {isEditingName ? (
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="text"
+                                                value={editedPartyName}
+                                                onChange={(e) => setEditedPartyName(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleSavePartyName()}
+                                                className="text-2xl font-bold text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={handleSavePartyName}
+                                                disabled={savingPartyName}
+                                                className="text-sm text-green-600 hover:text-green-800 disabled:opacity-50"
+                                            >
+                                                {savingPartyName ? 'Saving...' : 'Save'}
+                                            </button>
+                                            <button
+                                                onClick={handleCancelEdit}
+                                                className="text-sm text-gray-600 hover:text-gray-800"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center space-x-2">
+                                            <h1 className="text-2xl font-bold text-gray-900">{party.name}</h1>
+                                            {user?.uid === party.createdBy && (
+                                                <button
+                                                    onClick={handleEditPartyName}
+                                                    className="text-gray-400 hover:text-gray-600"
+                                                    title="Edit party name"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <p className="text-gray-600">{party.description}</p>
+                                </div>
+                                {user?.uid === party.createdBy && (
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => setShowDeleteConfirm(true)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                                            title="Delete party"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            <div className="text-right">
-                                <p className="text-sm text-gray-500">Created by</p>
-                                <p className="font-medium text-gray-900">
-                                    {memberProfiles.find((p: UserProfile) => p.uid === party.createdBy)?.displayName || 'Unknown'}
-                                </p>
+
+                            {/* Members Section */}
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-lg font-medium text-gray-900">
+                                        Members ({memberProfiles.length}/4)
+                                    </h3>
+                                    {party.members && party.members.length < 4 && (
+                                        <button
+                                            onClick={() => setShowInviteForm(!showInviteForm)}
+                                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700"
+                                        >
+                                            {showInviteForm ? 'Cancel' : 'Invite Members'}
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    {memberProfiles.map((profile: UserProfile) => {
+                                        const display = getUserDisplay(profile);
+                                        return (
+                                            <div
+                                                key={profile.uid}
+                                                className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
+                                                onClick={() => setSelectedUserForModal(profile)}
+                                            >
+                                                <div className={`w-10 h-10 rounded-full ${getInitialColor(profile.uid)} flex items-center justify-center text-white font-bold`}>
+                                                    {getInitial(profile)}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-gray-900">
+                                                        {profile.displayName || 'Unknown User'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">{profile.email}</p>
+                                                </div>
+                                                {profile.uid === party.createdBy && (
+                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                        Creator
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {memberProfiles.length === 0 && (
+                                        <p className="text-gray-500 text-center py-4">No members found</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Upcoming Events Section */}
+                            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                                <h3 className="text-lg font-medium text-green-900 mb-3">Upcoming Events</h3>
+                                {loadingUpcomingEvents ? (
+                                    <div className="text-sm text-green-700">Loading upcoming events...</div>
+                                ) : upcomingEvents.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {upcomingEvents.slice(0, 3).map((event, index) => (
+                                            <div key={event.id} className="bg-white rounded-lg p-3 border border-green-200">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="flex-shrink-0">
+                                                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-sm font-medium text-green-900 truncate">
+                                                            {event.restaurantData.restaurant?.name || 'Restaurant Event'}
+                                                        </h4>
+                                                        <p className="text-sm text-green-700">
+                                                            {event.scheduledTime.day.charAt(0).toUpperCase() + event.scheduledTime.day.slice(1)} at {event.scheduledTime.startTime}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {upcomingEvents.length > 3 && (
+                                            <div className="text-center pt-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setActiveTab('before-flow');
+                                                        setShowBeforeFlow(false);
+                                                        setShowScheduledEventsOnly(true);
+                                                    }}
+                                                    className="text-sm text-green-600 hover:text-green-800 underline"
+                                                >
+                                                    View all {upcomingEvents.length} events
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-4">
+                                        <div className="text-sm text-green-700">No upcoming events scheduled</div>
+                                        <button
+                                            onClick={() => setActiveTab('before-flow')}
+                                            className="mt-2 text-sm text-green-600 hover:text-green-800 underline"
+                                        >
+                                            Plan your first event
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="mb-6">
                             <p className="text-gray-600">{party.description}</p>
-                        </div>
-
-                        {/* Members Section */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-medium text-gray-900 mb-3">
-                                Members ({memberProfiles.length}/4)
-                            </h3>
-                            <div className="space-y-3">
-                                {memberProfiles.map((profile: UserProfile) => {
-                                    const display = getUserDisplay(profile);
-                                    return (
-                                        <div
-                                            key={profile.uid}
-                                            className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
-                                            onClick={() => setSelectedUserForModal(profile)}
-                                        >
-                                            <div className={`w-10 h-10 rounded-full ${getInitialColor(profile.uid)} flex items-center justify-center text-white font-bold`}>
-                                                {getInitial(profile)}
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-gray-900">
-                                                    {profile.displayName || 'Unknown User'}
-                                                </p>
-                                                <p className="text-xs text-gray-500">{profile.email}</p>
-                                            </div>
-                                            {profile.uid === party.createdBy && (
-                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                                    Creator
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {memberProfiles.length === 0 && (
-                                    <p className="text-gray-500 text-center py-4">No members found</p>
-                                )}
-                            </div>
                         </div>
 
                         {/* Group Preferences */}
@@ -892,7 +1128,7 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                         {showBeforeFlow ? (
                             <BeforeFlowTab partyId={partyId} onEventSaved={handleEventSaved} />
                         ) : (
-                            <EventsList partyId={partyId} />
+                            <EventsList partyId={partyId} showScheduledOnly={showScheduledEventsOnly} />
                         )}
                     </div>
                 );
@@ -1293,16 +1529,81 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId }) => {
                     </div>
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                        <div className="p-6">
+                            <div className="flex items-center space-x-3 mb-4">
+                                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900">Delete Party</h3>
+                            </div>
+                            <p className="text-gray-600 mb-6">
+                                Are you sure you want to delete <strong>"{party?.name}"</strong>? This action will permanently delete:
+                            </p>
+                            <ul className="text-sm text-gray-600 mb-6 space-y-2">
+                                <li className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>All party events and scheduled activities</span>
+                                </li>
+                                <li className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>All uploaded receipts and payment data</span>
+                                </li>
+                                <li className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>All pending payment requests</span>
+                                </li>
+                                <li className="flex items-center space-x-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span>All party invitations</span>
+                                </li>
+                            </ul>
+                            <p className="text-sm text-red-600 font-medium mb-6">
+                                This action cannot be undone.
+                            </p>
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteParty}
+                                    disabled={deletingParty}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {deletingParty ? 'Deleting...' : 'Delete Party'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
+const SingleParty: React.FC<SinglePartyProps> = ({ partyId, onPartyDeleted }) => {
     return (
         <PartyProvider partyId={partyId}>
             <VideoAnalysisProvider>
                 <UploadProvider>
-                    <SinglePartyContent partyId={partyId} />
+                    <SinglePartyContent partyId={partyId} onPartyDeleted={onPartyDeleted} />
                 </UploadProvider>
             </VideoAnalysisProvider>
         </PartyProvider>

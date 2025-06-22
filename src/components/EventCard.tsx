@@ -51,15 +51,22 @@ interface RestaurantEvent {
     createdBy?: string;
     status?: 'active' | 'archived' | 'deleted';
     notes?: string;
+    scheduledTime?: {
+        day: string;
+        hour: string;
+        startTime: string;
+        endTime: string;
+    };
 }
 
 interface EventCardProps {
     event: RestaurantEvent;
     onDelete: (eventId: string) => void;
     isDeleting: boolean;
+    onEventUpdated?: (event: RestaurantEvent) => void;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeleting }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeleting, onEventUpdated }) => {
     const [creatorName, setCreatorName] = useState<string>('Loading...');
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -84,6 +91,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
 
         fetchCreatorName();
     }, [event.createdBy]);
+
+    const handleEventUpdated = (updatedEvent: RestaurantEvent) => {
+        if (onEventUpdated) {
+            onEventUpdated(updatedEvent);
+        }
+    };
 
     const formatDate = (date: any) => {
         if (!date) return 'Unknown date';
@@ -182,6 +195,19 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                                     📍 {event.restaurantData.restaurant.address}
                                 </p>
                             )}
+                            {/* Scheduled Time Display */}
+                            {event.scheduledTime && (
+                                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-sm font-medium text-green-800 capitalize">
+                                            {event.scheduledTime.day} at {event.scheduledTime.startTime} - {event.scheduledTime.endTime}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center space-x-2">
                             <button
@@ -261,6 +287,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onDelete, isDeletin
                 creatorName={creatorName}
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
+                onEventUpdated={handleEventUpdated}
             />
         </div>
     );

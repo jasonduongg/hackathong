@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import Availability from './Availability';
 
 interface RestaurantEvent {
     id: string;
@@ -49,6 +50,12 @@ interface RestaurantEvent {
     createdBy?: string;
     status?: 'active' | 'archived' | 'deleted';
     notes?: string;
+    scheduledTime?: {
+        day: string;
+        hour: string;
+        startTime: string;
+        endTime: string;
+    };
 }
 
 interface EventModalProps {
@@ -56,9 +63,15 @@ interface EventModalProps {
     creatorName: string;
     isOpen: boolean;
     onClose: () => void;
+    onEventUpdated?: (event: RestaurantEvent) => void;
 }
 
-export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose }) => {
+export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated }) => {
+    const [showAvailability, setShowAvailability] = useState(false);
+    const [loadingMetadata, setLoadingMetadata] = useState(false);
+    const [commonTimes, setCommonTimes] = useState<any>(null);
+    const [memberMetadata, setMemberMetadata] = useState<any>(null);
+
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -76,6 +89,109 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
             document.body.style.overflow = 'unset';
         };
     }, [isOpen, onClose]);
+
+    const fetchMemberMetadata = async () => {
+        if (!event.partyId) return;
+
+        try {
+            setLoadingMetadata(true);
+            const response = await fetch(`/api/get-members?partyId=${event.partyId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                setMemberMetadata(data);
+                await fetchCommonTimes(data.memberProfiles);
+            } else {
+                console.error('Failed to fetch member metadata:', data.error);
+                alert('Failed to fetch member metadata');
+            }
+        } catch (error) {
+            console.error('Error fetching member metadata:', error);
+        } finally {
+            setLoadingMetadata(false);
+        }
+    };
+
+    const fetchCommonTimes = async (memberProfiles: any[]) => {
+        if (!memberProfiles || memberProfiles.length === 0) return;
+
+        try {
+            const response = await fetch('/api/get-times', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    memberProfiles: memberProfiles
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setCommonTimes(data);
+            } else {
+                console.error('Failed to fetch common times:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching common times:', error);
+        }
+    };
+
+    const handleConfirmSelection = async (restaurant: any, selectedTimeSlot: any) => {
+        if (!selectedTimeSlot) return;
+
+        try {
+            // Get the time slot details
+            const day = commonTimes.commonTimes.find((d: any) => d.day === selectedTimeSlot.day);
+            const slot = day?.timeSlots?.find((s: any) => s.hour === selectedTimeSlot.hour);
+
+            if (!slot) {
+                alert('Invalid time slot selected');
+                return;
+            }
+
+            // Update the event with the scheduled time
+            const updatedEvent = {
+                ...event,
+                scheduledTime: {
+                    day: selectedTimeSlot.day,
+                    hour: selectedTimeSlot.hour,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime
+                }
+            };
+
+            // Save to database
+            const response = await fetch('/api/events', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    eventId: event.id,
+                    scheduledTime: updatedEvent.scheduledTime
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update event');
+            }
+
+            // Call the callback to update the parent component
+            if (onEventUpdated) {
+                onEventUpdated(updatedEvent);
+            }
+
+            // Close the availability view
+            setShowAvailability(false);
+
+            alert(`Event scheduled for ${selectedTimeSlot.day} at ${slot.startTime} - ${slot.endTime}`);
+        } catch (error) {
+            console.error('Error updating event:', error);
+            alert('Failed to schedule event. Please try again.');
+        }
+    };
 
     const formatDate = (date: any) => {
         if (!date) return 'Unknown date';
@@ -113,6 +229,59 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
     };
 
     if (!isOpen) return null;
+
+    // If showing availability view, render the availability component
+    if (showAvailability) {
+        return (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+                {/* Backdrop */}
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+                    onClick={() => setShowAvailability(false)}
+                />
+
+                {/* Modal */}
+                <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                Schedule Event: {event.restaurantData.restaurant?.name || 'Restaurant'}
+                            </h2>
+                            <button
+                                onClick={() => setShowAvailability(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6">
+                            <Availability
+                                loadingMetadata={loadingMetadata}
+                                commonTimes={commonTimes}
+                                fetchMemberMetadata={fetchMemberMetadata}
+                                selectedRestaurant={{
+                                    name: event.restaurantData.restaurant?.name || 'Restaurant',
+                                    address: event.restaurantData.restaurant?.address || '',
+                                    rating: event.restaurantData.restaurant?.rating || undefined,
+                                    phone: event.restaurantData.restaurant?.phone || undefined,
+                                    website: event.restaurantData.restaurant?.website || undefined,
+                                    hours: event.restaurantData.restaurant?.hours || undefined,
+                                    isChain: event.restaurantData.restaurant?.isChain,
+                                    chainName: event.restaurantData.restaurant?.chainName || undefined
+                                }}
+                                onConfirmSelection={handleConfirmSelection}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -230,20 +399,55 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                                     <p className="text-gray-900">{event.restaurantData.restaurant?.phone || 'N/A'}</p>
                                 </div>
                                 <div className="md:col-span-2">
-                                    <p className="text-sm font-medium text-gray-700">Hours</p>
-                                    <div className="text-gray-900">
-                                        {event.restaurantData.restaurant?.hours && event.restaurantData.restaurant.hours.length > 0 ? (
-                                            <div className="space-y-1">
-                                                {event.restaurantData.restaurant.hours.map((hour, index) => (
-                                                    <p key={index} className="text-sm">{hour}</p>
-                                                ))}
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-gray-700">Hours</p>
+                                            <div className="text-gray-900">
+                                                {event.restaurantData.restaurant?.hours && event.restaurantData.restaurant.hours.length > 0 ? (
+                                                    <div className="space-y-1">
+                                                        {event.restaurantData.restaurant.hours.map((hour, index) => (
+                                                            <p key={index} className="text-sm">{hour}</p>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p>N/A</p>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <p>N/A</p>
-                                        )}
+                                        </div>
+                                        <div className="ml-4">
+                                            <button
+                                                onClick={() => setShowAvailability(true)}
+                                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                {event.scheduledTime ? 'Reschedule' : 'Schedule Event'}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Scheduled Time Display */}
+                            {event.scheduledTime && (
+                                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-green-800">Scheduled Time</p>
+                                            <p className="text-green-700 capitalize">
+                                                {event.scheduledTime.day} at {event.scheduledTime.startTime} - {event.scheduledTime.endTime}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowAvailability(true)}
+                                            className="text-green-600 hover:text-green-800 text-sm underline"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Analysis Information */}

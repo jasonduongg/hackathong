@@ -51,6 +51,12 @@ interface RestaurantEvent {
     createdBy?: string;
     status?: 'active' | 'archived' | 'deleted';
     notes?: string;
+    scheduledTime?: {
+        day: string;
+        hour: string;
+        startTime: string;
+        endTime: string;
+    };
 }
 
 interface EventsListProps {
@@ -116,6 +122,13 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
         }
     };
 
+    const handleEventUpdated = (updatedEvent: RestaurantEvent) => {
+        // Update the event in the local state
+        setEvents(prev => prev.map(event =>
+            event.id === updatedEvent.id ? updatedEvent : event
+        ));
+    };
+
     if (loading) {
         return (
             <div className="p-4">
@@ -179,6 +192,7 @@ export const EventsList: React.FC<EventsListProps> = ({ partyId }) => {
                         event={event}
                         onDelete={handleDeleteEvent}
                         isDeleting={deletingEvent === event.id}
+                        onEventUpdated={handleEventUpdated}
                     />
                 ))}
             </div>

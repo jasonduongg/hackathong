@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { PartyDetails } from '@/types/party';
 import { NearestRestaurantFinder } from './NearestRestaurantFinder';
+import ChainLocationFinder from './ChainLocationFinder';
 
 interface SinglePartyProps {
     partyId: string;
@@ -34,7 +35,7 @@ interface PartyReceipt {
     uploadedAt: any;
 }
 
-type TabType = 'info' | 'upload' | 'receipts';
+type TabType = 'info' | 'choose-restaurant' | 'upload' | 'receipts';
 
 const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const { user, userProfile } = useAuth();
@@ -57,6 +58,8 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
     const [loadingMetadata, setLoadingMetadata] = useState(false);
     const [showRestaurantFinder, setShowRestaurantFinder] = useState(false);
     const [restaurantFinderData, setRestaurantFinderData] = useState<any>(null);
+    const [showChainLocationFinder, setShowChainLocationFinder] = useState(false);
+    const [chainLocationData, setChainLocationData] = useState<any>(null);
     const [commonTimes, setCommonTimes] = useState<any>(null);
     const [loadingCommonTimes, setLoadingCommonTimes] = useState(false);
 
@@ -287,6 +290,12 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
         // You can add additional logic here, like saving to database or showing notifications
     };
 
+    const handleChainLocationFound = (data: any) => {
+        setChainLocationData(data);
+        console.log('Chain location found:', data);
+        // You can add additional logic here, like saving to database or showing notifications
+    };
+
     if (loading) {
         return <div className="text-center py-10">Loading party details...</div>;
     }
@@ -303,12 +312,6 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-semibold text-gray-900">Party Information</h2>
                             <div className="flex space-x-2">
-                                <button
-                                    onClick={() => setShowRestaurantFinder(!showRestaurantFinder)}
-                                    className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700"
-                                >
-                                    {showRestaurantFinder ? 'Hide Restaurant Finder' : 'Find Restaurant'}
-                                </button>
                                 <button
                                     onClick={() => {
                                         setShowRestaurantData(true);
@@ -390,34 +393,6 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                                 )}
                             </div>
                         </div>
-
-                        {/* Restaurant Finder */}
-                        {showRestaurantFinder && (
-                            <div className="mb-6">
-                                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                                    <div className="flex">
-                                        <div className="flex-shrink-0">
-                                            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div className="ml-3">
-                                            <h3 className="text-sm font-medium text-blue-800">Restaurant Finder</h3>
-                                            <div className="mt-2 text-sm text-blue-700">
-                                                <p>This feature finds the best restaurant location based on party member addresses.</p>
-                                                <p className="mt-1">
-                                                    <strong>Tip:</strong> Make sure all party members have completed their profile with their address information for the best results.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <NearestRestaurantFinder
-                                    partyId={partyId}
-                                    onRestaurantFound={handleRestaurantFound}
-                                />
-                            </div>
-                        )}
 
                         {/* Pending Invitations Bar */}
                         {pendingInvitations.length > 0 && (
@@ -559,6 +534,95 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                         </div>
                     </div>
                 );
+            case 'choose-restaurant':
+                return (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div className="mb-6">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Choose Restaurant</h2>
+                            <p className="text-gray-600 mb-6">
+                                Find the perfect restaurant for your party. Choose from your saved restaurants or find the closest one to your party members.
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Choose from Saved Restaurants */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                <div className="flex items-center mb-4">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                        </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-lg font-medium text-blue-900">Saved Restaurants</h3>
+                                        <p className="text-sm text-blue-700">Choose from your collection of restaurants</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <p className="text-sm text-blue-600">
+                                        Select from restaurants you've saved from videos and other sources.
+                                    </p>
+                                    
+                                    <button
+                                        onClick={() => {/* TODO: Navigate to saved restaurants page */}}
+                                        className="w-full px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                                    >
+                                        Browse Saved Restaurants
+                                    </button>
+                                    
+                                    <div className="text-xs text-blue-500">
+                                        <p>💡 Tip: Add restaurants to your collection by uploading videos on the Restaurant Library page</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Find Nearest Restaurant */}
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                                <div className="flex items-center mb-4">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-lg font-medium text-green-900">Find Nearest Restaurant</h3>
+                                        <p className="text-sm text-green-700">Discover restaurants near your party</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <p className="text-sm text-green-600">
+                                        Find the best restaurant location based on party member addresses.
+                                    </p>
+                                    
+                                    <NearestRestaurantFinder
+                                        partyId={partyId}
+                                        onRestaurantFound={handleRestaurantFound}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Testing Section - Can be removed in the future */}
+                        <div className="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <div className="flex items-center mb-3">
+                                <svg className="h-5 w-5 text-gray-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                                </svg>
+                                <h3 className="text-sm font-medium text-gray-700">Testing - Chain Location Finder</h3>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-3">
+                                This section is for testing purposes and can be removed in the future.
+                            </p>
+                            <ChainLocationFinder
+                                partyId={partyId}
+                                onLocationFound={handleChainLocationFound}
+                            />
+                        </div>
+                    </div>
+                );
             case 'upload':
                 return (
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -584,25 +648,34 @@ const SingleParty: React.FC<SinglePartyProps> = ({ partyId }) => {
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
                             Party Info
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('choose-restaurant')}
+                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'choose-restaurant'
+                                ? 'border-indigo-500 text-indigo-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            Choose Restaurant
                         </button>
                         <button
                             onClick={() => setActiveTab('upload')}
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'upload'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
-                            Upload Receipts
+                            Upload Receipt
                         </button>
                         <button
                             onClick={() => setActiveTab('receipts')}
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'receipts'
                                 ? 'border-indigo-500 text-indigo-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            }`}
                         >
                             Receipts
                         </button>

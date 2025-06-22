@@ -105,9 +105,9 @@ export const NearestRestaurantFinder: React.FC<NearestRestaurantFinderProps> = (
 
       if (!response.ok) {
         if (data.error === 'No members with addresses found') {
-          setError(`No members have completed their address information. Please ask party members to complete their profile with their location.`);
+          setError(`No members have completed their address information. Please ask party members to complete their profile with their full address (street, city, state).`);
         } else if (data.error === 'Could not geocode any member addresses') {
-          setError(`Unable to find the locations for member addresses. Please ensure addresses are valid and complete.`);
+          setError(`Unable to find the locations for member addresses. Please ensure addresses are complete and valid (street, city, state, zip code).`);
         } else if (data.error === 'Google Maps API key is missing') {
           setError(`Google Maps API is not configured. Please contact the administrator.`);
         } else {
@@ -182,9 +182,10 @@ export const NearestRestaurantFinder: React.FC<NearestRestaurantFinderProps> = (
                   <div className="mt-2">
                     <p className="font-medium">To fix this:</p>
                     <ul className="list-disc list-inside mt-1 space-y-1">
-                      <li>Complete your profile with your address information</li>
-                      <li>Ask other party members to add their addresses</li>
-                      <li>Ensure addresses are complete and valid</li>
+                      <li>Complete your profile with your full address (street, city, state)</li>
+                      <li>Ask other party members to add their complete addresses</li>
+                      <li>Ensure addresses include street, city, and state for best results</li>
+                      <li>Use valid, complete addresses that Google Maps can recognize</li>
                     </ul>
                   </div>
                 )}

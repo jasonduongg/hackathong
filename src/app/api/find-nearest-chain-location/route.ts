@@ -114,8 +114,8 @@ async function geocodeAddress(address: string): Promise<Location | null> {
   }
 }
 
-// Search for restaurants near a location using Google Places API
-async function searchRestaurants(location: Location, restaurantName?: string): Promise<PlaceResult[]> {
+// Search for specific restaurant locations using Google Places API
+async function searchRestaurantLocations(location: Location, restaurantName: string): Promise<PlaceResult[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     console.error('Google Maps API key not found');
@@ -123,23 +123,24 @@ async function searchRestaurants(location: Location, restaurantName?: string): P
   }
 
   try {
-    let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.lat},${location.lng}&radius=5000&type=restaurant&key=${apiKey}`;
+    // Use text search to find specific restaurant locations
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(restaurantName)}&location=${location.lat},${location.lng}&radius=50000&type=restaurant&key=${apiKey}`;
     
-    if (restaurantName) {
-      // If we have a specific restaurant name, search for it
-      url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(restaurantName)}&location=${location.lat},${location.lng}&radius=5000&type=restaurant&key=${apiKey}`;
-    }
-
+    console.log('Searching for restaurant locations:', restaurantName);
+    
     const response = await fetch(url);
     const data = await response.json();
     
     if (data.status === 'OK') {
+      console.log(`Found ${data.results.length} locations for ${restaurantName}`);
       return data.results;
+    } else {
+      console.error('Places API error:', data.status, data.error_message);
+      return [];
     }
     
-    return [];
   } catch (error) {
-    console.error('Error searching restaurants:', error);
+    console.error('Error searching restaurant locations:', error);
     return [];
   }
 }
@@ -200,6 +201,13 @@ export async function POST(request: NextRequest) {
     if (!partyId) {
       return NextResponse.json(
         { error: 'Party ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!restaurantData || !restaurantData.restaurant || !restaurantData.restaurant.name) {
+      return NextResponse.json(
+        { error: 'Restaurant data with name is required' },
         { status: 400 }
       );
     }
@@ -313,82 +321,104 @@ export async function POST(request: NextRequest) {
       lng: memberLocations.reduce((sum, member) => sum + member.location.lng, 0) / memberLocations.length
     };
 
-    // Search for restaurants
-    let restaurants: PlaceResult[] = [];
-    
-    if (restaurantData?.restaurant?.name) {
-      // If we have a specific restaurant name, search for it
-      restaurants = await searchRestaurants(centroid, restaurantData.restaurant.name);
-    } else {
-      // Search for general restaurants
-      restaurants = await searchRestaurants(centroid);
-    }
+    console.log('Party centroid:', centroid);
 
-    if (restaurants.length === 0) {
+    // Search for restaurant locations
+    const restaurantName = restaurantData.restaurant.name;
+    const restaurantLocations = await searchRestaurantLocations(centroid, restaurantName);
+
+    if (restaurantLocations.length === 0) {
       return NextResponse.json(
-        { error: 'No restaurants found near the party location' },
+        { 
+          error: `No locations found for ${restaurantName}`,
+          details: 'The restaurant may not have multiple locations or may not be in the search area'
+        },
         { status: 404 }
       );
     }
 
-    // Find the nearest restaurant to the centroid
-    let nearestRestaurant = restaurants[0];
+    // Find the nearest restaurant location to the centroid
+    let nearestLocation = restaurantLocations[0];
     let minDistance = calculateDistance(
       centroid.lat, centroid.lng,
-      nearestRestaurant.geometry.location.lat, nearestRestaurant.geometry.location.lng
+      nearestLocation.geometry.location.lat, nearestLocation.geometry.location.lng
     );
 
-    for (const restaurant of restaurants) {
+    for (const location of restaurantLocations) {
       const distance = calculateDistance(
         centroid.lat, centroid.lng,
-        restaurant.geometry.location.lat, restaurant.geometry.location.lng
+        location.geometry.location.lat, location.geometry.location.lng
       );
       
       if (distance < minDistance) {
         minDistance = distance;
-        nearestRestaurant = restaurant;
+        nearestLocation = location;
       }
     }
 
-    // Get detailed information about the nearest restaurant
-    const placeDetails = await getPlaceDetails(nearestRestaurant.place_id);
+    // Sort all locations by distance and take top 3
+    const sortedLocations = restaurantLocations
+      .map(location => ({
+        name: location.name,
+        address: location.formatted_address,
+        rating: location.rating || 0,
+        distance: calculateDistance(
+          centroid.lat, centroid.lng,
+          location.geometry.location.lat, location.geometry.location.lng
+        ),
+        placeId: location.place_id
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 3); // Take only top 3 closest locations
+
+    // Get detailed information for each location including hours
+    const locationsWithDetails = await Promise.all(
+      sortedLocations.map(async (location) => {
+        const details = await getPlaceDetails(location.placeId);
+        return {
+          name: location.name,
+          address: location.address,
+          rating: location.rating,
+          distance: location.distance,
+          hours: details?.opening_hours?.weekday_text || [],
+          phone: details?.formatted_phone_number || '',
+          website: details?.website || '',
+          googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${location.placeId}`
+        };
+      })
+    );
 
     // Format the response
     const response = {
-      restaurant: {
-        name: nearestRestaurant.name,
-        isChain: false, // Would need additional logic to determine this
-        chainName: null,
-        address: nearestRestaurant.formatted_address,
-        website: placeDetails?.website || '',
-        hours: placeDetails?.opening_hours?.weekday_text || [],
-        phone: placeDetails?.formatted_phone_number || '',
-        rating: nearestRestaurant.rating || 0,
-        placeId: nearestRestaurant.place_id
+      originalRestaurant: restaurantData.restaurant,
+      nearestLocation: {
+        name: locationsWithDetails[0].name,
+        address: locationsWithDetails[0].address,
+        website: locationsWithDetails[0].website,
+        hours: locationsWithDetails[0].hours,
+        phone: locationsWithDetails[0].phone,
+        rating: locationsWithDetails[0].rating,
+        placeId: sortedLocations[0].placeId,
+        distanceFromParty: locationsWithDetails[0].distance,
+        googleMapsUrl: locationsWithDetails[0].googleMapsUrl
       },
-      analysis: {
-        place_names: [nearestRestaurant.name],
-        multiple_locations: restaurants.length > 1,
-        activity_type: 'eating',
-        foods_shown: restaurantData?.analysis?.foods_shown || [],
-        tags: restaurantData?.analysis?.tags || [],
-        context_clues: restaurantData?.analysis?.context_clues || []
-      },
-      processing: {
-        frameCount: restaurantData?.processing?.frameCount || 0,
-        originalPlaceCount: restaurants.length,
-        validatedPlaceCount: 1,
-        geocodedPlaceCount: memberLocations.length
-      },
-      location: {
+      allLocations: locationsWithDetails,
+      partyInfo: {
         centroid,
+        memberCount: memberLocations.length,
         memberLocations: memberLocations.map(member => ({
           userId: member.profile.uid,
           displayName: member.profile.displayName,
           location: member.location,
           address: member.profile.address
-        })),
-        distanceToRestaurant: minDistance
+        }))
+      },
+      analysis: {
+        totalLocationsFound: restaurantLocations.length,
+        topLocationsShown: 3,
+        searchRadius: '50km',
+        restaurantName: restaurantName,
+        isChain: restaurantLocations.length > 1
       }
     };
 
@@ -398,9 +428,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error finding nearest restaurant:', error);
+    console.error('Error finding nearest chain location:', error);
     return NextResponse.json(
-      { error: 'Failed to find nearest restaurant' },
+      { error: 'Failed to find nearest chain location' },
       { status: 500 }
     );
   }

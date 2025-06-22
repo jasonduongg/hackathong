@@ -165,7 +165,7 @@ export const VIDEO_ANALYSIS_PROMPTS = {
     Analyze the provided image according to these specific requirements and provide a detailed response.`,
 
     // Instagram-specific structured analysis
-    instagram: `You are an expert Instagram content analyst. Analyze this Instagram post screenshot and extract specific information from both the visual content AND any visible text (captions, hashtags, location tags, account mentions, etc.) in the following JSON format:
+    instagram: `You are an expert Instagram content analyst. Analyze this Instagram content screenshot and extract specific information from both the visual content AND any visible text (captions, hashtags, location tags, account mentions, etc.) in the following JSON format:
 
     {
         "place_names": ["single restaurant/business name only - no landmarks or tourist attractions"],

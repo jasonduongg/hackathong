@@ -15,7 +15,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.log('Taking screenshot of Instagram post:', url);
+        // Check if it's a valid Instagram post or reel URL
+        const isValidInstagramUrl = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
+        if (!isValidInstagramUrl) {
+            return NextResponse.json(
+                { error: 'Invalid Instagram URL. Must be a post (instagram.com/p/) or reel (instagram.com/reel/)' },
+                { status: 400 }
+            );
+        }
+
+        console.log('Taking screenshot of Instagram content:', url);
 
         // ENHANCED: URL-based carousel detection using index=X parameter
         console.log('Analyzing URL for carousel indicators...');
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
         // ENHANCED: Set viewport to desktop dimensions to capture more content including captions
         await page.setViewport({ width: 1200, height: 800 });
         
-        // Navigate to the Instagram post
+        // Navigate to the Instagram content
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
         
         // ENHANCED: Wait longer for Instagram to fully load, especially for carousels
@@ -310,7 +319,7 @@ export async function POST(request: NextRequest) {
 
         if (!postElement) {
             await browser.close();
-            return NextResponse.json({ error: 'Could not find Instagram post content on page.' }, { status: 404 });
+            return NextResponse.json({ error: 'Could not find Instagram content on page.' }, { status: 404 });
         }
 
         // ENHANCED: Find the specific media area to crop to just the post content
@@ -1114,6 +1123,6 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('Instagram screenshot error:', error);
-        return NextResponse.json({ error: error.message || 'Failed to screenshot Instagram post.' }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Failed to screenshot Instagram content.' }, { status: 500 });
     }
 } 

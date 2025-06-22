@@ -36,7 +36,7 @@ async function downloadImageAsBase64(url: string): Promise<string> {
     }
 }
 
-// Instagram Post Processing (Images)
+// Instagram Content Processing (Images)
 export async function processInstagramPost(
     url: string,
     promptType: string = 'general',
@@ -60,7 +60,7 @@ export async function processInstagramPost(
                     content: [
                         {
                             type: "text",
-                            text: "Please analyze this Instagram post according to the system instructions provided."
+                            text: "Please analyze this Instagram content according to the system instructions provided."
                         },
                         {
                             type: "image",
@@ -83,7 +83,7 @@ export async function processInstagramPost(
         };
     } catch (error) {
         console.error('Anthropic API error:', error);
-        throw new Error('Failed to process Instagram post with Anthropic');
+        throw new Error('Failed to process Instagram content with Anthropic');
     }
 }
 

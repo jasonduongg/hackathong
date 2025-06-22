@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
       // Using restaurant data from video analysis
       searchQuery = restaurantData.restaurant.name;
       originalRestaurant = restaurantData.restaurant;
+      console.log(`Using restaurant data from video analysis: ${searchQuery}`);
     } else if (restaurantName && restaurantName.trim() !== '') {
       // Using direct restaurant name search
       searchQuery = restaurantName.trim();
@@ -232,12 +233,15 @@ export async function POST(request: NextRequest) {
         rating: 0,
         placeId: ''
       };
+      console.log(`Using direct restaurant name search: ${searchQuery}`);
     } else {
       return NextResponse.json(
         { error: 'Either restaurant data with name or restaurant name is required' },
         { status: 400 }
       );
     }
+
+    console.log(`Final search query: ${searchQuery}`);
 
     // Get party details
     const partyRef = doc(db, 'parties', partyId);

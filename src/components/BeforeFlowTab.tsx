@@ -69,7 +69,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
 
     // Initialize loading tasks based on URL type
     const initializeLoadingTasks = (url: string) => {
-        const isInstagram = url.includes('instagram.com/p/');
+        const isInstagram = url.includes('instagram.com/p/') || url.includes('instagram.com/reel/');
 
         if (isInstagram) {
             setLoadingTasks([
@@ -274,7 +274,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
             const formData = new FormData();
 
             // Check if it's an Instagram URL
-            const isInstagram = beforeFlowUrl.includes('instagram.com/p/');
+            const isInstagram = beforeFlowUrl.includes('instagram.com/p/') || beforeFlowUrl.includes('instagram.com/reel/');
 
             if (isInstagram) {
                 // Task 1: Screenshot
@@ -352,6 +352,9 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     analysisFormData.append('videoDuration', screenshotData.videoDuration.toString());
                 }
 
+                // Add partyId for chain location finding
+                analysisFormData.append('partyId', partyId);
+
                 setBeforeFlowProgress({ step: `Analyzing ${screenshotData.screenshotCount} screenshots...`, percentage: 60, details: 'Sending to AI for analysis' });
 
                 const analysisResponse = await fetch('/api/process-video', {
@@ -398,6 +401,7 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                 formData.append('url', beforeFlowUrl);
                 formData.append('promptType', 'structured');
                 formData.append('provider', 'anthropic');
+                formData.append('partyId', partyId);
 
                 // Task 1: Analysis
                 updateLoadingTask('analysis', 'loading', 50);
@@ -474,13 +478,17 @@ const BeforeFlowTab: React.FC<BeforeFlowTabProps> = ({ partyId, onEventSaved }) 
                     name: beforeFlowResult.restaurantDetails.name,
                     isChain: beforeFlowResult.restaurantDetails.isChain,
                     chainName: beforeFlowResult.restaurantDetails.isChain ? beforeFlowResult.restaurantDetails.chainName : null,
-                    address: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.address,
-                    website: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.website,
-                    hours: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.hours,
-                    phone: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.phone,
-                    rating: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.rating,
-                    placeId: beforeFlowResult.restaurantDetails.isChain ? null : beforeFlowResult.restaurantDetails.placeId,
-                    image: beforeFlowResult.restaurantDetails.image || null
+                    // For chains, include the specific location details if available
+                    address: beforeFlowResult.restaurantDetails.address,
+                    website: beforeFlowResult.restaurantDetails.website,
+                    hours: beforeFlowResult.restaurantDetails.hours,
+                    phone: beforeFlowResult.restaurantDetails.phone,
+                    rating: beforeFlowResult.restaurantDetails.rating,
+                    placeId: beforeFlowResult.restaurantDetails.placeId,
+                    image: beforeFlowResult.restaurantDetails.image || null,
+                    // Chain-specific fields
+                    distanceFromParty: beforeFlowResult.restaurantDetails.distanceFromParty || null,
+                    googleMapsUrl: beforeFlowResult.restaurantDetails.googleMapsUrl || null
                 } : null,
                 analysis: {
                     place_names: (beforeFlowResult.place_names || []).slice(0, 5), // Limit array length

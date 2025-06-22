@@ -43,6 +43,81 @@ function levenshteinDistance(str1: string, str2: string): number {
     return matrix[str2.length][str1.length];
 }
 
+// Function to check if a restaurant is a chain
+async function checkIfChainRestaurant(restaurantName: string): Promise<boolean> {
+    const chainRestaurants = [
+        'mcdonalds', 'mcdonald\'s', 'mcdonald',
+        'starbucks', 'starbuck',
+        'chipotle', 'chipotle mexican grill',
+        'subway', 'subway restaurants',
+        'kfc', 'kentucky fried chicken',
+        'pizza hut', 'pizzahut',
+        'dominos', 'domino\'s', 'domino\'s pizza',
+        'burger king', 'burgerking',
+        'wendys', 'wendy\'s',
+        'taco bell', 'tacobell',
+        'shake shack', 'shakeshack',
+        'five guys', 'fiveguys',
+        'in-n-out', 'in n out burger',
+        'chick-fil-a', 'chick fil a',
+        'popeyes', 'popeyes louisiana kitchen',
+        'dunkin', 'dunkin donuts',
+        'panera', 'panera bread',
+        'olive garden', 'olivegarden',
+        'applebees', 'applebee\'s',
+        'red lobster', 'redlobster',
+        'outback', 'outback steakhouse',
+        'chilis', 'chili\'s', 'chili\'s grill & bar',
+        'buffalo wild wings', 'buffalo wild wings grill & bar',
+        'tgi fridays', 'tgi friday\'s',
+        'red robin', 'redrobin',
+        'cheesecake factory', 'cheesecakefactory',
+        'p.f. chang\'s', 'pf changs',
+        'california pizza kitchen', 'cpk',
+        'buca di beppo', 'bucadibeppo',
+        'carrabba\'s', 'carrabbas',
+        'bonefish grill', 'bonefishgrill',
+        'flemings', 'flemings steakhouse',
+        'longhorn steakhouse', 'longhorn',
+        'texas roadhouse', 'texasroadhouse',
+        'logan\'s roadhouse', 'logans roadhouse',
+        'golden corral', 'goldencorral',
+        'cracker barrel', 'crackerbarrel',
+        'ihop', 'international house of pancakes',
+        'denny\'s', 'dennys',
+        'waffle house', 'wafflehouse',
+        'perkins', 'perkins restaurant & bakery',
+        'bob evans', 'bobevans',
+        'cracker barrel', 'crackerbarrel',
+        'olive garden', 'olivegarden',
+        'red lobster', 'redlobster',
+        'longhorn steakhouse', 'longhorn',
+        'outback steakhouse', 'outback',
+        'bonefish grill', 'bonefishgrill',
+        'carrabba\'s italian grill', 'carrabbas',
+        'flemings prime steakhouse & wine bar', 'flemings',
+        'buca di beppo', 'bucadibeppo',
+        'seasons 52', 'seasons52',
+        'bahama breeze', 'bahamabreeze',
+        'eddie v\'s prime seafood', 'eddie vs',
+        'capital grille', 'capitalgrille',
+        'ruth\'s chris steak house', 'ruths chris',
+        'morton\'s the steakhouse', 'mortons',
+        'fogo de chao', 'fogo de chão',
+        'texas de brazil', 'texas de brazil churrascaria',
+        'brazilian steakhouse', 'brazilian steak house',
+        'churrascaria', 'churrascaria brazilian steakhouse',
+        'zachary\'s pizza', 'zacharys pizza', 'zachary\'s chicago pizza'
+    ];
+
+    const normalizedName = restaurantName.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    
+    return chainRestaurants.some(chain => {
+        const normalizedChain = chain.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+        return normalizedName.includes(normalizedChain) || normalizedChain.includes(normalizedName);
+    });
+}
+
 // Optimized restaurant deduction with early exit
 async function performOptimizedRestaurantDeduction(
     filteredPlaces: string[],
@@ -50,7 +125,8 @@ async function performOptimizedRestaurantDeduction(
     captionText?: string,
     accountMentions?: string,
     locationTags?: string,
-    hashtags?: string
+    hashtags?: string,
+    partyId?: string
 ): Promise<{ deducedRestaurant: string | null; restaurantDetails: any; uniqueRestaurantNames: string[]; hasMultipleRestaurants: boolean }> {
 
     // Early exit if no places found
@@ -129,19 +205,71 @@ async function performOptimizedRestaurantDeduction(
         // Get detailed restaurant information
         const placeDetails = await getPlaceDetails(restaurantName);
 
+        // Check if this is a chain restaurant
+        const isChain = await checkIfChainRestaurant(restaurantName);
+        
+        let finalRestaurantDetails: any = {
+            name: restaurantName,
+            isChain: isChain,
+            chainName: isChain ? restaurantName : null,
+            address: placeDetails?.formatted_address || null,
+            website: placeDetails?.website || null,
+            hours: placeDetails?.opening_hours?.weekday_text || null,
+            phone: placeDetails?.formatted_phone_number || null,
+            rating: placeDetails?.rating || null,
+            placeId: placeDetails?.place_id || null,
+            image: placeDetails?.photoUrl || null
+        };
+
+        // If it's a chain and we have partyId, find the closest location
+        if (isChain && partyId) {
+            try {
+                console.log(`Chain detected: ${restaurantName}, searching for closest location...`);
+                
+                const chainLocationResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/search-restaurant`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        partyId,
+                        restaurantName: restaurantName
+                    })
+                });
+
+                console.log(`Search request sent for: ${restaurantName}`);
+
+                if (chainLocationResponse.ok) {
+                    const chainLocationData = await chainLocationResponse.json();
+                    if (chainLocationData.success && chainLocationData.data.allLocations.length > 0) {
+                        // Get the closest location
+                        const closestLocation = chainLocationData.data.allLocations[0];
+                        console.log(`Found closest location: ${closestLocation.name} at ${closestLocation.address}`);
+                        finalRestaurantDetails = {
+                            name: closestLocation.name,
+                            isChain: true,
+                            chainName: restaurantName,
+                            address: closestLocation.address,
+                            website: closestLocation.website,
+                            hours: closestLocation.hours,
+                            phone: closestLocation.phone,
+                            rating: closestLocation.rating,
+                            placeId: closestLocation.placeId,
+                            image: closestLocation.image,
+                            distanceFromParty: closestLocation.distance,
+                            googleMapsUrl: closestLocation.googleMapsUrl
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Error finding chain location:', error);
+                // Keep the original details if chain location finding fails
+            }
+        }
+
         return {
             deducedRestaurant: restaurantName,
-            restaurantDetails: {
-                name: restaurantName,
-                isChain: false,
-                address: placeDetails?.formatted_address || null,
-                website: placeDetails?.website || null,
-                hours: placeDetails?.opening_hours?.weekday_text || null,
-                phone: placeDetails?.formatted_phone_number || null,
-                rating: placeDetails?.rating || null,
-                placeId: placeDetails?.place_id || null,
-                image: placeDetails?.photoUrl || null
-            },
+            restaurantDetails: finalRestaurantDetails,
             uniqueRestaurantNames,
             hasMultipleRestaurants: false
         };
@@ -369,7 +497,10 @@ export async function POST(request: NextRequest) {
 
         const geocodedPlaces = (await Promise.all(geocodingPromises)).filter(Boolean);
 
-        // OPTIMIZED: Simplified restaurant deduction
+        // Get partyId from form data if available
+        const partyId = formData.get('partyId') as string;
+
+        // OPTIMIZED: Simplified restaurant deduction with chain location finding
         const { deducedRestaurant, restaurantDetails, uniqueRestaurantNames, hasMultipleRestaurants } =
             await performOptimizedRestaurantDeduction(
                 filteredPlaces,
@@ -377,7 +508,8 @@ export async function POST(request: NextRequest) {
                 captionText,
                 accountMentions,
                 locationTags,
-                hashtags
+                hashtags,
+                partyId
             );
 
         return NextResponse.json({
@@ -425,7 +557,8 @@ export async function GET() {
             frames: 'Frames to analyze (optional, multiple frames separated by commas)',
             promptType: 'Type of analysis: general, security, educational, sports, structured, custom (optional, default: general)',
             customInstructions: 'Custom instructions for analysis (optional, used with promptType: custom)',
-            provider: 'LLM provider: anthropic (optional, default: anthropic)'
+            provider: 'LLM provider: anthropic (optional, default: anthropic)',
+            partyId: 'Party ID for chain location finding (optional)'
         },
         availablePrompts: [
             'general - General content analysis',
@@ -441,7 +574,8 @@ export async function GET() {
         ],
         notes: [
             'Video file processing is currently limited - use image URLs for best results',
-            'Either video file or URL must be provided, not both'
+            'Either video file or URL must be provided, not both',
+            'Chain restaurants will automatically find the closest location to party members'
         ]
     });
 }
@@ -450,4 +584,4 @@ async function combineFrameAnalyses(frameAnalyses: any[]): Promise<any> {
     // For now, return the first frame's analysis
     // In the future, we could implement more sophisticated combination logic
     return frameAnalyses[0];
-} 
+}

@@ -196,7 +196,8 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    memberProfiles: memberProfiles
+                    memberProfiles: memberProfiles,
+                    upcomingEvents: upcomingEvents
                 })
             });
 
@@ -372,6 +373,18 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
         }
     }, [memberProfiles]);
 
+    // Refresh common times when upcoming events change
+    useEffect(() => {
+        if (memberMetadata && memberMetadata.memberProfiles && upcomingEvents) {
+            // Add a small delay to prevent rapid successive calls
+            const timeoutId = setTimeout(() => {
+                fetchCommonTimes(memberMetadata.memberProfiles);
+            }, 200);
+            
+            return () => clearTimeout(timeoutId);
+        }
+    }, [upcomingEvents?.length]); // Only depend on the length, not the entire array
+
     // Helper function to get background color for initials
     const getInitialColor = (uid: string) => {
         const colors = [
@@ -502,6 +515,11 @@ const SinglePartyContent: React.FC<SinglePartyProps> = ({ partyId, onPartyDelete
         // Refresh upcoming events to update the availability grid
         fetchUpcomingEvents();
         fetchEventsCount();
+        
+        // Refresh common times to update availability calculations
+        if (memberMetadata && memberMetadata.memberProfiles) {
+            fetchCommonTimes(memberMetadata.memberProfiles);
+        }
     };
 
     const handleEditPartyName = () => {

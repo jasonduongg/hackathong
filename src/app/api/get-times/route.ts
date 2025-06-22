@@ -27,12 +27,13 @@ interface MemberProfile {
 
 interface RequestBody {
     memberProfiles: MemberProfile[];
+    upcomingEvents?: any[];
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body: RequestBody = await request.json();
-        const { memberProfiles } = body;
+        const { memberProfiles, upcomingEvents = [] } = body;
 
         if (!memberProfiles || !Array.isArray(memberProfiles) || memberProfiles.length === 0) {
             return NextResponse.json(
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Find common availability times where ALL members are available
-        const commonTimes = findCommonAvailabilityTimes(memberProfiles);
+        const commonTimes = findCommonAvailabilityTimes(memberProfiles, upcomingEvents);
 
         // Also extract aggregated preferences for additional context
         const aggregatedPreferences = extractAggregatedPreferences(memberProfiles);
@@ -99,8 +100,47 @@ function extractAggregatedPreferences(memberProfiles: MemberProfile[]) {
     };
 }
 
+// Helper function to check if a time slot is already scheduled
+function isTimeSlotScheduled(day: string, hour: string, upcomingEvents: any[]): boolean {
+    if (!upcomingEvents || upcomingEvents.length === 0) return false;
+    
+    return upcomingEvents.some(event => {
+        if (!event.scheduledTime) return false;
+        
+        // Check if the event is scheduled for this exact day
+        if (event.scheduledTime.day !== day) return false;
+        
+        // Parse start and end times
+        const startTime = event.scheduledTime.startTime;
+        const endTime = event.scheduledTime.endTime;
+        
+        if (!startTime) return false;
+        
+        // Convert time strings to hours (e.g., "1:00 PM" -> 13, "1:00 AM" -> 1)
+        const parseTimeToHour = (timeStr: string) => {
+            const time = timeStr.toLowerCase();
+            const isPM = time.includes('pm');
+            const timeMatch = time.match(/(\d+):(\d+)/);
+            
+            if (!timeMatch) return 0;
+            
+            let hour = parseInt(timeMatch[1]);
+            if (isPM && hour !== 12) hour += 12;
+            if (!isPM && hour === 12) hour = 0;
+            
+            return hour;
+        };
+        
+        const eventStartHour = parseTimeToHour(startTime);
+        const eventEndHour = endTime ? parseTimeToHour(endTime) : eventStartHour + 1;
+        
+        // Check if the current hour falls within the event's time range
+        return parseInt(hour) >= eventStartHour && parseInt(hour) < eventEndHour;
+    });
+}
+
 // Helper function to find common availability times where ALL members are available
-function findCommonAvailabilityTimes(memberProfiles: MemberProfile[]) {
+function findCommonAvailabilityTimes(memberProfiles: MemberProfile[], upcomingEvents: any[]) {
     const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
     
@@ -110,6 +150,11 @@ function findCommonAvailabilityTimes(memberProfiles: MemberProfile[]) {
         const dayCommonSlots: string[] = [];
         
         hours.forEach(hour => {
+            // Skip if this time slot is already scheduled
+            if (isTimeSlotScheduled(day, hour, upcomingEvents)) {
+                return;
+            }
+            
             let allAvailable = true;
             
             // Check if ALL members are available at this time slot

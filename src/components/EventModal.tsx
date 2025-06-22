@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Availability from './Availability';
 
 interface RestaurantEvent {
@@ -68,7 +68,7 @@ interface EventModalProps {
     upcomingEvents?: any[];
 }
 
-export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOpen, onClose, onEventUpdated, openToAvailability, upcomingEvents }) => {
+export const EventModal: React.FC<EventModalProps> = React.memo(({ event, creatorName, isOpen, onClose, onEventUpdated, openToAvailability, upcomingEvents }) => {
     const [showAvailability, setShowAvailability] = useState(false);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
     const [commonTimes, setCommonTimes] = useState<any>(null);
@@ -104,7 +104,14 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
         }
     }, [showAvailability, memberMetadata, loadingMetadata]);
 
-    const fetchMemberMetadata = async () => {
+    // Refresh common times when upcoming events change, but only if we have member data
+    useEffect(() => {
+        if (memberMetadata && memberMetadata.memberProfiles && upcomingEvents) {
+            fetchCommonTimes(memberMetadata.memberProfiles);
+        }
+    }, [upcomingEvents?.length]); // Only depend on the length, not the entire array
+
+    const fetchMemberMetadata = useCallback(async () => {
         if (!event.partyId) return;
 
         try {
@@ -124,9 +131,9 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
         } finally {
             setLoadingMetadata(false);
         }
-    };
+    }, [event.partyId, upcomingEvents]);
 
-    const fetchCommonTimes = async (memberProfiles: any[]) => {
+    const fetchCommonTimes = useCallback(async (memberProfiles: any[]) => {
         if (!memberProfiles || memberProfiles.length === 0) return;
 
         try {
@@ -136,7 +143,8 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    memberProfiles: memberProfiles
+                    memberProfiles: memberProfiles,
+                    upcomingEvents: upcomingEvents
                 })
             });
 
@@ -150,7 +158,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
         } catch (error) {
             console.error('Error fetching common times:', error);
         }
-    };
+    }, [upcomingEvents]);
 
     const handleConfirmSelection = async (restaurant: any, selectedTimeSlot: any) => {
         if (!selectedTimeSlot) return;
@@ -194,6 +202,11 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
 
             // Call the callback to update the parent component
             notifyParentOfChange(updatedEvent);
+
+            // Refresh common times to update availability calculations
+            if (memberMetadata && memberMetadata.memberProfiles) {
+                await fetchCommonTimes(memberMetadata.memberProfiles);
+            }
 
             // Close the availability view
             setShowAvailability(false);
@@ -268,6 +281,11 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
             // Call the callback to notify parent of the change
             notifyParentOfChange(undefined);
 
+            // Refresh common times to update availability calculations
+            if (memberMetadata && memberMetadata.memberProfiles) {
+                await fetchCommonTimes(memberMetadata.memberProfiles);
+            }
+
             // Close the modal
             onClose();
 
@@ -304,6 +322,11 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                 ...event,
                 scheduledTime: undefined
             });
+
+            // Refresh common times to update availability calculations
+            if (memberMetadata && memberMetadata.memberProfiles) {
+                await fetchCommonTimes(memberMetadata.memberProfiles);
+            }
 
             // Close the modal
             onClose();
@@ -348,6 +371,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
                         {/* Content */}
                         <div className="p-6">
                             <Availability
+                                key={`availability-${event.id}-${upcomingEvents?.length || 0}`}
                                 loadingMetadata={loadingMetadata}
                                 commonTimes={commonTimes}
                                 fetchMemberMetadata={fetchMemberMetadata}
@@ -638,4 +662,6 @@ export const EventModal: React.FC<EventModalProps> = ({ event, creatorName, isOp
             </div>
         </div>
     );
-}; 
+});
+
+EventModal.displayName = 'EventModal'; 
